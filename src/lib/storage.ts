@@ -1,4 +1,4 @@
-import type { LocalState } from "@/lib/types";
+import type { LocalState, PriceSnapshot, WatchlistEntry } from "@/lib/types";
 
 const STORAGE_KEY = "cs-price-tracker:v1";
 
@@ -43,6 +43,76 @@ export function saveLocalState(state: LocalState) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+export function isTracked(state: LocalState, marketHashName: string) {
+  return state.watchlist.some((item) => item.marketHashName === marketHashName);
+}
+
+export function addToWatchlist(
+  state: LocalState,
+  entry: Pick<WatchlistEntry, "marketHashName" | "displayName">,
+): LocalState {
+  if (isTracked(state, entry.marketHashName)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    watchlist: [
+      ...state.watchlist,
+      {
+        ...entry,
+        addedAt: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
+export function removeFromWatchlist(
+  state: LocalState,
+  marketHashName: string,
+): LocalState {
+  return {
+    ...state,
+    watchlist: state.watchlist.filter((item) => item.marketHashName !== marketHashName),
+  };
+}
+
+export function appendPriceSnapshot(
+  state: LocalState,
+  snapshot: PriceSnapshot,
+  maxPoints = 120,
+): LocalState {
+  const current = state.historyByItem[snapshot.marketHashName] ?? [];
+  const last = current.at(-1);
+
+  if (last && last.amount === snapshot.amount) {
+    return state;
+  }
+
+  const nextHistory = [...current, snapshot].slice(-maxPoints);
+
+  return {
+    ...state,
+    historyByItem: {
+      ...state.historyByItem,
+      [snapshot.marketHashName]: nextHistory,
+    },
+  };
+}
+
+export function updateSettings(
+  state: LocalState,
+  settings: Partial<LocalState["settings"]>,
+): LocalState {
+  return {
+    ...state,
+    settings: {
+      ...state.settings,
+      ...settings,
+    },
+  };
 }
 
 export { DEFAULT_STATE, STORAGE_KEY };

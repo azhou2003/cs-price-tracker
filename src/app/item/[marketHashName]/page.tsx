@@ -1,3 +1,6 @@
+import { ItemDetailClient } from "@/components/item-detail-client";
+import { fetchSteamPrice } from "@/lib/steam";
+
 type ItemPageProps = {
   params: Promise<{ marketHashName: string }>;
 };
@@ -13,14 +16,19 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const { marketHashName } = await params;
   const itemName = decodeURIComponent(marketHashName);
 
+  let initialPrice = null;
+
+  try {
+    initialPrice = await fetchSteamPrice(itemName);
+  } catch {
+    initialPrice = null;
+  }
+
   return (
-    <section className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
-      <p className="text-xs uppercase tracking-[0.2em] text-sky-300">Item detail</p>
-      <h2 className="mt-2 text-2xl font-semibold text-slate-50">{itemName}</h2>
-      <p className="mt-2 text-sm text-slate-300">
-        Detail page scaffold is ready. Price card, watchlist actions, and local history
-        chart will be added here.
-      </p>
-    </section>
+    <ItemDetailClient
+      displayName={itemName}
+      initialPrice={initialPrice}
+      marketHashName={itemName}
+    />
   );
 }

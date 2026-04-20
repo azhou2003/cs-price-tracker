@@ -9,14 +9,14 @@ preferences are stored in the browser only.
 - Tailwind CSS v4
 - Route Handlers as a stateless proxy layer for market data
 
-## Current Scaffold
+## Current Features
 
 - App pages:
-  - `/` dashboard scaffold
-  - `/search` search scaffold
-  - `/item/[marketHashName]` item detail scaffold
-  - `/settings` settings scaffold
-- API route stubs:
+  - `/` dashboard with local watchlist overview and refresh-all action
+  - `/search` debounced Steam item search
+  - `/item/[marketHashName]` item detail with price refresh, watchlist toggle, and local history
+  - `/settings` local preferences (refresh interval + notifications toggle)
+- API routes:
   - `/api/health`
   - `/api/search`
   - `/api/price`
@@ -24,6 +24,7 @@ preferences are stored in the browser only.
   - `types.ts`
   - `storage.ts`
   - `api-client.ts`
+  - `steam.ts`
 
 ## Run Locally
 
@@ -34,9 +35,13 @@ npm run dev
 
 Then open `http://localhost:3000`.
 
+## Notes
+
+- User data remains browser-local (`localStorage`) with no server persistence.
+- Proxy routes add request validation, timeout handling, and short in-memory cache.
+
 ## Next Steps
 
-1. Implement Steam-backed search and price fetch logic in route handlers.
-2. Wire `/search` and `/item/[marketHashName]` to typed client functions.
-3. Add watchlist and local price snapshot persistence.
-4. Add refresh controls, alert thresholds, and notification UX.
+1. Add chart visualization for local price history.
+2. Add threshold alerts (`lowAlert`, `highAlert`) and browser notification triggers.
+3. Add optional batch price endpoint for faster watchlist refreshes.

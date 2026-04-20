@@ -4,6 +4,9 @@ export type MarketItem = {
   marketHashName: string;
   displayName: string;
   iconUrl?: string;
+  listingCount?: number;
+  startingPrice?: number;
+  startingPriceText?: string;
 };
 
 export type PriceSnapshot = {
@@ -12,6 +15,9 @@ export type PriceSnapshot = {
   currency: CurrencyCode;
   timestamp: string;
   source: "steam";
+  lowestPriceText?: string;
+  medianPriceText?: string;
+  volume?: number;
 };
 
 export type WatchlistEntry = {
