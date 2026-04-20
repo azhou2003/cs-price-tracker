@@ -8,6 +8,10 @@ type PriceResponse = {
   price: PriceSnapshot | null;
 };
 
+type ItemResponse = {
+  item: MarketItem | null;
+};
+
 type ErrorResponse = {
   error?: string;
 };
@@ -50,4 +54,18 @@ export async function fetchItemPrice(
 
   const data = (await response.json()) as PriceResponse;
   return data.price;
+}
+
+export async function fetchItemMeta(
+  marketHashName: string,
+): Promise<MarketItem | null> {
+  const params = new URLSearchParams({ marketHashName });
+  const response = await fetch(`/api/item?${params.toString()}`);
+
+  if (!response.ok) {
+    throw await toError(response, "Failed to fetch item metadata");
+  }
+
+  const data = (await response.json()) as ItemResponse;
+  return data.item;
 }

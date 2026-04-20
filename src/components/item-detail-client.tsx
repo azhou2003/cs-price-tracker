@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
 
 import { fetchItemPrice } from "@/lib/api-client";
@@ -17,6 +18,7 @@ type ItemDetailClientProps = {
   marketHashName: string;
   displayName: string;
   initialPrice: PriceSnapshot | null;
+  iconUrl?: string;
 };
 
 function formatTimestamp(value: string) {
@@ -38,6 +40,7 @@ export function ItemDetailClient({
   marketHashName,
   displayName,
   initialPrice,
+  iconUrl,
 }: ItemDetailClientProps) {
   const [state, setState] = useState<LocalState>(() => loadLocalState());
   const [price, setPrice] = useState<PriceSnapshot | null>(initialPrice);
@@ -81,6 +84,7 @@ export function ItemDetailClient({
       : addToWatchlist(current, {
           marketHashName,
           displayName,
+          iconUrl,
         });
 
     saveLocalState(next);
@@ -94,6 +98,19 @@ export function ItemDetailClient({
       <article className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
         <p className="text-xs uppercase tracking-[0.2em] text-sky-300">Item detail</p>
         <h2 className="mt-2 text-2xl font-semibold text-slate-50">{displayName}</h2>
+
+        {iconUrl ? (
+          <div className="mt-4 inline-flex rounded-xl border border-slate-700 bg-slate-950/60 p-2">
+            <Image
+              alt={displayName}
+              height={96}
+              priority
+              src={iconUrl}
+              width={96}
+            />
+          </div>
+        ) : null}
+
         <p className="mt-2 text-sm text-slate-300">Hash name: {marketHashName}</p>
 
         <div className="mt-4 flex flex-wrap gap-3">

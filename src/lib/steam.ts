@@ -101,6 +101,21 @@ export async function searchSteamItems(query: string, limit = 20) {
     .filter((item): item is MarketItem => item !== null);
 }
 
+export async function fetchSteamItemByHash(marketHashName: string) {
+  const results = await searchSteamItems(marketHashName, 100);
+
+  const exact = results.find((item) => item.marketHashName === marketHashName);
+  if (exact) {
+    return exact;
+  }
+
+  const caseInsensitive = results.find(
+    (item) => item.marketHashName.toLowerCase() === marketHashName.toLowerCase(),
+  );
+
+  return caseInsensitive ?? null;
+}
+
 export async function fetchSteamPrice(
   marketHashName: string,
 ): Promise<PriceSnapshot | null> {

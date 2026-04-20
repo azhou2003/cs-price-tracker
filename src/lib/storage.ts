@@ -51,7 +51,7 @@ export function isTracked(state: LocalState, marketHashName: string) {
 
 export function addToWatchlist(
   state: LocalState,
-  entry: Pick<WatchlistEntry, "marketHashName" | "displayName">,
+  entry: Pick<WatchlistEntry, "marketHashName" | "displayName" | "iconUrl">,
 ): LocalState {
   if (isTracked(state, entry.marketHashName)) {
     return state;
@@ -76,6 +76,24 @@ export function removeFromWatchlist(
   return {
     ...state,
     watchlist: state.watchlist.filter((item) => item.marketHashName !== marketHashName),
+  };
+}
+
+export function setWatchlistIcon(
+  state: LocalState,
+  marketHashName: string,
+  iconUrl: string,
+): LocalState {
+  return {
+    ...state,
+    watchlist: state.watchlist.map((item) =>
+      item.marketHashName === marketHashName
+        ? {
+            ...item,
+            iconUrl,
+          }
+        : item,
+    ),
   };
 }
 

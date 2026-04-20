@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -99,10 +100,24 @@ export function SearchPageClient() {
                   className="flex items-start justify-between gap-3 hover:text-sky-300"
                   href={`/item/${encodeURIComponent(item.marketHashName)}`}
                 >
-                  <span>
-                    <span className="block text-sm text-slate-50">{item.displayName}</span>
-                    <span className="mt-1 block text-xs text-slate-400">
-                      {item.listingCount ?? 0} active listings
+                  <span className="flex items-start gap-3">
+                    {item.iconUrl ? (
+                      <Image
+                        alt={item.displayName}
+                        className="rounded-md border border-slate-700 bg-slate-900"
+                        height={56}
+                        src={item.iconUrl}
+                        width={56}
+                      />
+                    ) : (
+                      <span className="h-14 w-14 rounded-md border border-slate-700 bg-slate-900" />
+                    )}
+
+                    <span>
+                      <span className="block text-sm text-slate-50">{item.displayName}</span>
+                      <span className="mt-1 block text-xs text-slate-400">
+                        {item.listingCount ?? 0} active listings
+                      </span>
                     </span>
                   </span>
                   <span className="text-sm font-medium text-slate-200">

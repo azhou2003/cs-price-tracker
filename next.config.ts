@@ -1,7 +1,19 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    minimumCacheTTL: 604800,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "community.fastly.steamstatic.com",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.fastly.steamstatic.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

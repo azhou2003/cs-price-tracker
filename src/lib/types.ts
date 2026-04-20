@@ -23,6 +23,7 @@ export type PriceSnapshot = {
 export type WatchlistEntry = {
   marketHashName: string;
   displayName: string;
+  iconUrl?: string;
   addedAt: string;
   lowAlert?: number;
   highAlert?: number;

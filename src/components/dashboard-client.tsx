@@ -1,10 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { fetchItemPrice } from "@/lib/api-client";
-import { appendPriceSnapshot, loadLocalState, saveLocalState } from "@/lib/storage";
+import { fetchItemMeta, fetchItemPrice } from "@/lib/api-client";
+import {
+  appendPriceSnapshot,
+  loadLocalState,
+  saveLocalState,
+  setWatchlistIcon,
+} from "@/lib/storage";
 import type { LocalState } from "@/lib/types";
 
 function formatUsd(value: number) {
@@ -41,6 +47,45 @@ export function DashboardClient() {
       latestSnapshot,
     };
   }, [state, watchlist.length]);
+
+  useEffect(() => {
+    const missingIcons = watchlist.filter((item) => !item.iconUrl);
+    if (missingIcons.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function hydrateIcons() {
+      let nextState = loadLocalState();
+      let changed = false;
+
+      for (const item of missingIcons) {
+        try {
+          const meta = await fetchItemMeta(item.marketHashName);
+          if (!meta?.iconUrl) {
+            continue;
+          }
+
+          nextState = setWatchlistIcon(nextState, item.marketHashName, meta.iconUrl);
+          changed = true;
+        } catch {
+          // Ignore metadata failures and keep existing placeholder.
+        }
+      }
+
+      if (!cancelled && changed) {
+        saveLocalState(nextState);
+        setState(nextState);
+      }
+    }
+
+    void hydrateIcons();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [watchlist]);
 
   const refreshWatchlist = async () => {
     if (watchlist.length === 0) {
@@ -139,10 +184,24 @@ export function DashboardClient() {
                     className="flex items-start justify-between gap-3 hover:text-sky-300"
                     href={`/item/${encodeURIComponent(item.marketHashName)}`}
                   >
-                    <span>
-                      <span className="block text-sm text-slate-50">{item.displayName}</span>
-                      <span className="mt-1 block text-xs text-slate-400">
-                        Added {formatTimestamp(item.addedAt)}
+                    <span className="flex items-start gap-3">
+                      {item.iconUrl ? (
+                        <Image
+                          alt={item.displayName}
+                          className="rounded-md border border-slate-700 bg-slate-900"
+                          height={44}
+                          src={item.iconUrl}
+                          width={44}
+                        />
+                      ) : (
+                        <span className="h-11 w-11 rounded-md border border-slate-700 bg-slate-900" />
+                      )}
+
+                      <span>
+                        <span className="block text-sm text-slate-50">{item.displayName}</span>
+                        <span className="mt-1 block text-xs text-slate-400">
+                          Added {formatTimestamp(item.addedAt)}
+                        </span>
                       </span>
                     </span>
                     <span className="text-sm font-medium text-slate-200">
