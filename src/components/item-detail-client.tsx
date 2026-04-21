@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchItemPrice } from "@/lib/api-client";
 import {
   addToWatchlist,
   appendPriceSnapshot,
+  DEFAULT_STATE,
   isTracked,
   loadLocalState,
   removeFromWatchlist,
@@ -26,7 +27,12 @@ function formatTimestamp(value: string) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return date.toLocaleString();
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 function formatUsd(value: number) {
@@ -42,10 +48,20 @@ export function ItemDetailClient({
   initialPrice,
   iconUrl,
 }: ItemDetailClientProps) {
-  const [state, setState] = useState<LocalState>(() => loadLocalState());
+  const [state, setState] = useState<LocalState>(DEFAULT_STATE);
   const [price, setPrice] = useState<PriceSnapshot | null>(initialPrice);
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setState(loadLocalState());
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, []);
 
   const history = useMemo(() => {
     return state.historyByItem[marketHashName] ?? [];

@@ -45,6 +45,14 @@ export function saveLocalState(state: LocalState) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+export function clearLocalState() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEY);
+}
+
 export function isTracked(state: LocalState, marketHashName: string) {
   return state.watchlist.some((item) => item.marketHashName === marketHashName);
 }

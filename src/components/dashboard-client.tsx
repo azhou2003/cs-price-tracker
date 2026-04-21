@@ -2,16 +2,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { fetchItemMeta, fetchItemPrice } from "@/lib/api-client";
+import { fetchItemMeta, fetchItemPrice, searchItems } from "@/lib/api-client";
 import {
+  addToWatchlist,
   appendPriceSnapshot,
+  DEFAULT_STATE,
+  isTracked,
   loadLocalState,
   saveLocalState,
   setWatchlistIcon,
 } from "@/lib/storage";
-import type { LocalState } from "@/lib/types";
+import type { LocalState, MarketItem } from "@/lib/types";
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -25,28 +28,63 @@ function formatTimestamp(value: string) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return date.toLocaleString();
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 export function DashboardClient() {
-  const [state, setState] = useState<LocalState>(() => loadLocalState());
+  const [state, setState] = useState<LocalState>(DEFAULT_STATE);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MarketItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const watchlist = state.watchlist;
 
-  const summary = useMemo(() => {
-    const trackedCount = watchlist.length;
-    const snapshots = Object.values(state.historyByItem).flat();
-    const latestSnapshot = snapshots
-      .slice()
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setState(loadLocalState());
+    }, 0);
 
-    return {
-      trackedCount,
-      latestSnapshot,
+    return () => {
+      window.clearTimeout(timeout);
     };
-  }, [state, watchlist.length]);
+  }, []);
+
+  useEffect(() => {
+    const value = query.trim();
+    if (value.length < 3) {
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      setIsSearching(true);
+      setSearchError(null);
+
+      try {
+        const results = await searchItems(value);
+        setSearchResults(results);
+      } catch (requestError) {
+        setSearchError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Failed to search items",
+        );
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [query]);
 
   useEffect(() => {
     const missingIcons = watchlist.filter((item) => !item.iconUrl);
@@ -118,37 +156,95 @@ export function DashboardClient() {
     }
   };
 
+  const addItem = (item: MarketItem) => {
+    const nextState = addToWatchlist(loadLocalState(), {
+      marketHashName: item.marketHashName,
+      displayName: item.displayName,
+      iconUrl: item.iconUrl,
+    });
+
+    saveLocalState(nextState);
+    setState(nextState);
+  };
+
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-300">Tracked items</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-50">{summary.trackedCount}</p>
-          <p className="mt-2 text-sm text-slate-300">
-            All watchlist data is saved locally in this browser.
-          </p>
-        </article>
+      <article className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
+        <h2 className="text-xl font-semibold text-slate-50">Search items</h2>
+        <p className="mt-2 text-sm text-slate-300">
+          Type 3+ characters to search Steam and add items to your watchlist.
+        </p>
+        <input
+          className="mt-4 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-sky-400"
+          onChange={(event) => {
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
 
-        <article className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-300">Latest snapshot</p>
-          {summary.latestSnapshot ? (
-            <>
-              <p className="mt-2 text-lg font-semibold text-slate-50">
-                {summary.latestSnapshot.marketHashName}
-              </p>
-              <p className="mt-1 text-sm text-slate-200">
-                {summary.latestSnapshot.lowestPriceText ??
-                  formatUsd(summary.latestSnapshot.amount)}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                {formatTimestamp(summary.latestSnapshot.timestamp)}
-              </p>
-            </>
+            if (nextQuery.trim().length < 3) {
+              setSearchResults([]);
+              setSearchError(null);
+              setIsSearching(false);
+            }
+          }}
+          placeholder="AK-47 Redline"
+          value={query}
+        />
+
+        {isSearching ? <p className="mt-3 text-sm text-slate-300">Searching...</p> : null}
+        {searchError ? <p className="mt-3 text-sm text-rose-300">{searchError}</p> : null}
+
+        {query.trim().length >= 3 && !isSearching && !searchError ? (
+          searchResults.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-300">No items found.</p>
           ) : (
-            <p className="mt-2 text-sm text-slate-300">No snapshots captured yet.</p>
-          )}
-        </article>
-      </div>
+            <ul className="mt-4 space-y-2">
+              {searchResults.map((item) => {
+                const alreadyTracked = isTracked(state, item.marketHashName);
+
+                return (
+                  <li
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3"
+                    key={item.marketHashName}
+                  >
+                    <Link
+                      className="flex items-start gap-3 hover:text-sky-300"
+                      href={`/item/${encodeURIComponent(item.marketHashName)}`}
+                    >
+                      {item.iconUrl ? (
+                        <Image
+                          alt={item.displayName}
+                          className="rounded-md border border-slate-700 bg-slate-900"
+                          height={44}
+                          src={item.iconUrl}
+                          width={44}
+                        />
+                      ) : (
+                        <span className="h-11 w-11 rounded-md border border-slate-700 bg-slate-900" />
+                      )}
+                      <span>
+                        <span className="block text-sm text-slate-50">{item.displayName}</span>
+                        <span className="mt-1 block text-xs text-slate-400">
+                          {item.startingPriceText ?? "N/A"}
+                        </span>
+                      </span>
+                    </Link>
+                    <button
+                      className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
+                      disabled={alreadyTracked}
+                      onClick={() => {
+                        addItem(item);
+                      }}
+                      type="button"
+                    >
+                      {alreadyTracked ? "Added" : "Add"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : null}
+      </article>
 
       <article className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -167,9 +263,7 @@ export function DashboardClient() {
         {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
 
         {watchlist.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-300">
-            Your watchlist is empty. Start in <Link className="text-sky-300" href="/search">Search</Link>.
-          </p>
+          <p className="mt-3 text-sm text-slate-300">Your watchlist is empty. Add items above.</p>
         ) : (
           <ul className="mt-4 space-y-2">
             {watchlist.map((item) => {

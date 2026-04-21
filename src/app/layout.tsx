@@ -39,19 +39,10 @@ export default function RootLayout({
                 <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
                   CS Price Tracker
                 </p>
-                <h1 className="text-lg font-semibold text-slate-50">
-                  Local-first market watchlist
-                </h1>
               </div>
               <nav className="flex flex-wrap gap-2 text-sm">
                 <Link className="rounded-full bg-slate-800 px-4 py-2 hover:bg-slate-700" href="/">
                   Dashboard
-                </Link>
-                <Link
-                  className="rounded-full bg-slate-800 px-4 py-2 hover:bg-slate-700"
-                  href="/search"
-                >
-                  Search
                 </Link>
                 <Link
                   className="rounded-full bg-slate-800 px-4 py-2 hover:bg-slate-700"

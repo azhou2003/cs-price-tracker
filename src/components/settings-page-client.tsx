@@ -1,17 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { loadLocalState, saveLocalState, updateSettings } from "@/lib/storage";
+import {
+  clearLocalState,
+  DEFAULT_STATE,
+  loadLocalState,
+  saveLocalState,
+  updateSettings,
+} from "@/lib/storage";
 
 export function SettingsPageClient() {
   const [refreshMinutes, setRefreshMinutes] = useState(
-    () => loadLocalState().settings.refreshIntervalMinutes,
+    DEFAULT_STATE.settings.refreshIntervalMinutes,
   );
   const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => loadLocalState().settings.notificationsEnabled,
+    DEFAULT_STATE.settings.notificationsEnabled,
   );
   const [saved, setSaved] = useState(false);
+  const [cleared, setCleared] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const state = loadLocalState();
+      setRefreshMinutes(state.settings.refreshIntervalMinutes);
+      setNotificationsEnabled(state.settings.notificationsEnabled);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, []);
 
   const onSave = () => {
     const current = loadLocalState();
@@ -25,6 +44,25 @@ export function SettingsPageClient() {
     window.setTimeout(() => {
       setSaved(false);
     }, 1500);
+  };
+
+  const onClear = () => {
+    const confirmed = window.confirm(
+      "Clear all local data? This removes watchlist, history, and settings from this browser.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    clearLocalState();
+    setRefreshMinutes(DEFAULT_STATE.settings.refreshIntervalMinutes);
+    setNotificationsEnabled(DEFAULT_STATE.settings.notificationsEnabled);
+    setSaved(false);
+    setCleared(true);
+    window.setTimeout(() => {
+      setCleared(false);
+    }, 2000);
   };
 
   return (
@@ -61,16 +99,31 @@ export function SettingsPageClient() {
           />
           Enable local browser notifications
         </label>
+        <p className="text-xs text-slate-400">
+          This toggle stores your preference for future price alerts. Alerts are not being
+          sent yet until threshold notifications are implemented.
+        </p>
 
-        <button
-          className="rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-sky-400"
-          onClick={onSave}
-          type="button"
-        >
-          Save Settings
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-sky-400"
+            onClick={onSave}
+            type="button"
+          >
+            Save Settings
+          </button>
+
+          <button
+            className="rounded-full bg-rose-900/70 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-800"
+            onClick={onClear}
+            type="button"
+          >
+            Clear Local Data
+          </button>
+        </div>
 
         {saved ? <p className="text-sm text-emerald-300">Saved.</p> : null}
+        {cleared ? <p className="text-sm text-amber-300">Local data cleared.</p> : null}
       </div>
     </section>
   );

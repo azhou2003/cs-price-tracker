@@ -1,9 +1,5 @@
-import { SearchPageClient } from "@/components/search-page-client";
-
-export const metadata = {
-  title: "Search",
-};
+import { redirect } from "next/navigation";
 
 export default function SearchPage() {
-  return <SearchPageClient />;
+  redirect("/");
 }
