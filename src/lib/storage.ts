@@ -105,6 +105,25 @@ export function setWatchlistIcon(
   };
 }
 
+export function updateWatchlistAlerts(
+  state: LocalState,
+  marketHashName: string,
+  alerts: Pick<WatchlistEntry, "lowAlert" | "highAlert">,
+): LocalState {
+  return {
+    ...state,
+    watchlist: state.watchlist.map((item) =>
+      item.marketHashName === marketHashName
+        ? {
+            ...item,
+            lowAlert: alerts.lowAlert,
+            highAlert: alerts.highAlert,
+          }
+        : item,
+    ),
+  };
+}
+
 export function appendPriceSnapshot(
   state: LocalState,
   snapshot: PriceSnapshot,

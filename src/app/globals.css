@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617;
-  --foreground: #e2e8f0;
+  --background: #101822;
+  --foreground: #d6e2f0;
+  --steam-blue-900: #0b141d;
+  --steam-blue-800: #14212e;
+  --steam-blue-700: #1b2a3a;
+  --steam-blue-600: #23384d;
+  --steam-accent: #66c0f4;
+  --steam-accent-strong: #4b8bbd;
+  --steam-success: #8bc53f;
+  --steam-warn: #f0ad4e;
 }
 
 @theme inline {
@@ -18,8 +26,16 @@ body {
   background: var(--background);
   color: var(--foreground);
   background-image:
-    radial-gradient(circle at 10% 10%, rgb(56 189 248 / 0.2), transparent 28%),
-    radial-gradient(circle at 80% 15%, rgb(14 116 144 / 0.22), transparent 34%),
-    linear-gradient(160deg, #020617 0%, #0b1120 100%);
+    radial-gradient(circle at 12% 14%, rgb(102 192 244 / 0.18), transparent 28%),
+    radial-gradient(circle at 78% 18%, rgb(46 76 104 / 0.3), transparent 34%),
+    linear-gradient(160deg, #101822 0%, #0b141d 55%, #0f1a25 100%);
   font-family: var(--font-geist-sans), sans-serif;
+}
+
+a,
+button,
+input,
+select {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease,
+    box-shadow 140ms ease, opacity 140ms ease;
 }

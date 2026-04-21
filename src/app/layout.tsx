@@ -32,20 +32,24 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-slate-950 text-slate-100">
-        <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-          <header className="rounded-2xl border border-sky-300/20 bg-slate-900/60 px-4 py-4 backdrop-blur sm:px-6">
+        <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-10">
+          <header className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1f2d3a] to-[#121a24] px-4 py-4 shadow-[0_14px_30px_rgba(0,0,0,0.38)] sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[#89a9c3]">
                   CS Price Tracker
                 </p>
+                <p className="mt-1 text-sm font-medium text-[#d9e7f5]">Community Market Watch</p>
               </div>
               <nav className="flex flex-wrap gap-2 text-sm">
-                <Link className="rounded-full bg-slate-800 px-4 py-2 hover:bg-slate-700" href="/">
+                <Link
+                  className="cursor-pointer rounded-md border border-[#2d4155] bg-gradient-to-b from-[#2a4864] to-[#20374d] px-4 py-2 font-medium text-[#c7d5e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#346088] hover:to-[#284965]"
+                  href="/"
+                >
                   Dashboard
                 </Link>
                 <Link
-                  className="rounded-full bg-slate-800 px-4 py-2 hover:bg-slate-700"
+                  className="cursor-pointer rounded-md border border-[#2d4155] bg-gradient-to-b from-[#2a4864] to-[#20374d] px-4 py-2 font-medium text-[#c7d5e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#346088] hover:to-[#284965]"
                   href="/settings"
                 >
                   Settings

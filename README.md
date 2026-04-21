@@ -14,7 +14,6 @@ preferences are stored in the browser only.
 - App pages:
   - `/` dashboard with local watchlist overview and refresh-all action
   - `/search` debounced Steam item search
-  - `/item/[marketHashName]` item detail with price refresh, watchlist toggle, and local history
   - `/settings` local preferences (refresh interval + notifications toggle)
 - API routes:
   - `/api/health`
