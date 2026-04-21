@@ -46,7 +46,13 @@ export default function RootLayout({
                   className="cursor-pointer rounded-md border border-[#2d4155] bg-gradient-to-b from-[#2a4864] to-[#20374d] px-4 py-2 font-medium text-[#c7d5e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#346088] hover:to-[#284965]"
                   href="/"
                 >
-                  Dashboard
+                  Watchlist
+                </Link>
+                <Link
+                  className="cursor-pointer rounded-md border border-[#2d4155] bg-gradient-to-b from-[#2a4864] to-[#20374d] px-4 py-2 font-medium text-[#c7d5e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#346088] hover:to-[#284965]"
+                  href="/games"
+                >
+                  Daily Games
                 </Link>
                 <Link
                   className="cursor-pointer rounded-md border border-[#2d4155] bg-gradient-to-b from-[#2a4864] to-[#20374d] px-4 py-2 font-medium text-[#c7d5e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#346088] hover:to-[#284965]"

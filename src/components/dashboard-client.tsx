@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
+import { WatchlistTargetShowcase } from "@/components/watchlist-target-showcase";
 import { fetchItemMeta, fetchItemPrice, searchItems } from "@/lib/api-client";
 import {
   addToWatchlist,
@@ -287,6 +288,17 @@ export function DashboardClient() {
     setState(nextState);
   };
 
+  const selectSearchItem = (item: MarketItem) => {
+    if (!isTracked(state, item.marketHashName)) {
+      addItem(item);
+    }
+
+    setQuery("");
+    setSearchResults([]);
+    setSearchError(null);
+    setIsSearching(false);
+  };
+
   const openItemModal = (item: WatchlistEntry) => {
     setActiveItem(item);
     setActiveError(null);
@@ -384,78 +396,89 @@ export function DashboardClient() {
 
   return (
     <section className="space-y-5 pb-4">
+      <WatchlistTargetShowcase historyByItem={state.historyByItem} watchlist={watchlist} />
+
       <article className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-6 shadow-[0_12px_26px_rgba(0,0,0,0.34)]">
-        <h2 className="text-xl font-semibold text-[#d9e7f5]">Search items</h2>
-        <p className="mt-2 text-sm text-[#9fb5ca]">
-          Type 3+ characters to search Steam and add items to your watchlist.
-        </p>
-        <input
-          className="mt-4 w-full rounded-md border border-[#31465d] bg-[#0d141d] px-4 py-3 text-[#d9e7f5] outline-none focus:border-[#66c0f4] focus:shadow-[0_0_0_2px_rgba(102,192,244,0.18)]"
-          onChange={(event) => {
-            const nextQuery = event.target.value;
-            setQuery(nextQuery);
+        <h2 className="text-xl font-semibold text-[#d9e7f5]">Add items</h2>
+        <p className="mt-2 text-sm text-[#9fb5ca]">Search Steam and click an item to add it.</p>
 
-            if (nextQuery.trim().length < 3) {
-              setSearchResults([]);
-              setSearchError(null);
-              setIsSearching(false);
-            }
-          }}
-          placeholder="AK-47 Redline"
-          value={query}
-        />
+        <div className="relative mt-4">
+          <input
+            className="w-full rounded-md border border-[#31465d] bg-[#0d141d] px-4 py-3 text-[#d9e7f5] outline-none focus:border-[#66c0f4] focus:shadow-[0_0_0_2px_rgba(102,192,244,0.18)]"
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
 
-        {isSearching ? <p className="mt-3 text-sm text-[#9fb5ca]">Searching...</p> : null}
-        {searchError ? <p className="mt-3 text-sm text-rose-300">{searchError}</p> : null}
+              if (nextQuery.trim().length < 3) {
+                setSearchResults([]);
+                setSearchError(null);
+                setIsSearching(false);
+              }
+            }}
+            placeholder="Search for CS items (e.g. AK-47 Redline)"
+            value={query}
+          />
 
-        {query.trim().length >= 3 && !isSearching && !searchError ? (
-          searchResults.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-300">No items found.</p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {searchResults.map((item) => {
-                const alreadyTracked = isTracked(state, item.marketHashName);
+          {query.trim().length >= 3 ? (
+            <div className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-md border border-[#2f4256] bg-[#0f1721] shadow-[0_18px_34px_rgba(0,0,0,0.42)]">
+              {isSearching ? <p className="px-4 py-3 text-sm text-[#9fb5ca]">Searching...</p> : null}
+              {searchError ? <p className="px-4 py-3 text-sm text-rose-300">{searchError}</p> : null}
 
-                return (
-                  <li
-                    className="flex items-center justify-between gap-3 rounded-md border border-[#2d3f52] bg-[#111b27]/85 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
-                    key={item.marketHashName}
-                  >
-                    <div className="flex items-start gap-3">
-                      {item.iconUrl ? (
-                        <Image
-                          alt={item.displayName}
-                          className="rounded-md border border-slate-700 bg-slate-900"
-                          height={44}
-                          src={item.iconUrl}
-                          width={44}
-                        />
-                      ) : (
-                        <span className="h-11 w-11 rounded-md border border-slate-700 bg-slate-900" />
-                      )}
-                      <span>
-                        <span className="block text-sm text-slate-50">{item.displayName}</span>
-                        <span className="mt-1 block text-xs text-slate-400">
-                          {item.startingPriceText ?? "N/A"}
-                        </span>
-                      </span>
-                    </div>
-                    <button
-                      className="cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-3 py-1.5 text-xs font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-300"
-                      disabled={alreadyTracked}
-                      onClick={() => {
-                        addItem(item);
-                      }}
-                      type="button"
-                    >
-                      {alreadyTracked ? "Added" : "Add"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )
-        ) : null}
+              {!isSearching && !searchError ? (
+                searchResults.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-slate-300">No items found.</p>
+                ) : (
+                  <ul>
+                    {searchResults.map((item) => {
+                      const alreadyTracked = isTracked(state, item.marketHashName);
+
+                      return (
+                        <li className="border-b border-[#1d2b39] last:border-b-0" key={item.marketHashName}>
+                          <button
+                            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#162536]"
+                            onClick={() => {
+                              selectSearchItem(item);
+                            }}
+                            type="button"
+                          >
+                            <span className="flex min-w-0 items-start gap-3">
+                              {item.iconUrl ? (
+                                <Image
+                                  alt={item.displayName}
+                                  className="rounded-md border border-slate-700 bg-slate-900"
+                                  height={40}
+                                  src={item.iconUrl}
+                                  width={40}
+                                />
+                              ) : (
+                                <span className="h-10 w-10 rounded-md border border-slate-700 bg-slate-900" />
+                              )}
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm text-slate-50">{item.displayName}</span>
+                                <span className="mt-1 block text-xs text-slate-400">
+                                  {item.startingPriceText ?? "N/A"}
+                                </span>
+                              </span>
+                            </span>
+                            <span
+                              className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                                alreadyTracked
+                                  ? "border-[#3a4f64] bg-[#203142] text-[#a9bdd0]"
+                                  : "border-[#3d5f2f] bg-[#243a1d] text-[#b7d88d]"
+                              }`}
+                            >
+                              {alreadyTracked ? "Added" : "Add"}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </article>
 
       <article className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-6 shadow-[0_12px_26px_rgba(0,0,0,0.34)]">
@@ -546,37 +569,32 @@ export function DashboardClient() {
 
                     return (
                       <tr
-                        className="border-b border-[#1d2b39] last:border-b-0 hover:bg-[#162536]"
+                        className="cursor-pointer border-b border-[#1d2b39] last:border-b-0 hover:bg-[#162536]"
                         key={item.marketHashName}
+                        onClick={() => {
+                          openItemModal(item);
+                        }}
                       >
                         <td className="px-4 py-3 align-top">
-                          <button
-                            className="cursor-pointer text-left hover:text-[#66c0f4]"
-                            onClick={() => {
-                              openItemModal(item);
-                            }}
-                            type="button"
-                          >
-                            <span className="flex items-start gap-3">
-                              {item.iconUrl ? (
-                                <Image
-                                  alt={item.displayName}
-                                  className="rounded-md border border-slate-700 bg-slate-900"
-                                  height={44}
-                                  src={item.iconUrl}
-                                  width={44}
-                                />
-                              ) : (
-                                <span className="h-11 w-11 rounded-md border border-slate-700 bg-slate-900" />
-                              )}
-                              <span>
-                                <span className="block text-sm font-medium text-[#d9e7f5]">{item.displayName}</span>
-                                <span className="mt-1 block text-xs text-[#8ba8c1]">
-                                  Added {formatTimestamp(item.addedAt)}
-                                </span>
+                          <span className="flex items-start gap-3">
+                            {item.iconUrl ? (
+                              <Image
+                                alt={item.displayName}
+                                className="rounded-md border border-slate-700 bg-slate-900"
+                                height={44}
+                                src={item.iconUrl}
+                                width={44}
+                              />
+                            ) : (
+                              <span className="h-11 w-11 rounded-md border border-slate-700 bg-slate-900" />
+                            )}
+                            <span>
+                              <span className="block text-sm font-medium text-[#d9e7f5]">{item.displayName}</span>
+                              <span className="mt-1 block text-xs text-[#8ba8c1]">
+                                Added {formatTimestamp(item.addedAt)}
                               </span>
                             </span>
-                          </button>
+                          </span>
                         </td>
                       <td className="px-4 py-3 align-top text-[#c7d5e0]">
                           {latest ? latest.lowestPriceText ?? formatUsd(latest.amount) : "No price yet"}

@@ -1,4 +1,11 @@
-import type { MarketItem, PriceSnapshot } from "@/lib/types";
+import type {
+  DailyGameChallengeResponse,
+  DailyGameGuessResponse,
+  DailyPriceGuessAttemptResponse,
+  DailyPriceGuessChallengeResponse,
+  MarketItem,
+  PriceSnapshot,
+} from "@/lib/types";
 
 type SearchResponse = {
   results: MarketItem[];
@@ -10,6 +17,16 @@ type PriceResponse = {
 
 type ItemResponse = {
   item: MarketItem | null;
+};
+
+type DailyGameGuessPayload = {
+  dayKey: string;
+  orderedMarketHashNames: string[];
+};
+
+type DailyPriceGuessPayload = {
+  dayKey: string;
+  guess: number;
 };
 
 type ErrorResponse = {
@@ -68,4 +85,60 @@ export async function fetchItemMeta(
 
   const data = (await response.json()) as ItemResponse;
   return data.item;
+}
+
+export async function fetchDailyGame(): Promise<DailyGameChallengeResponse> {
+  const response = await fetch("/api/daily-game");
+
+  if (!response.ok) {
+    throw await toError(response, "Failed to fetch daily game");
+  }
+
+  return (await response.json()) as DailyGameChallengeResponse;
+}
+
+export async function submitDailyGameGuess(
+  payload: DailyGameGuessPayload,
+): Promise<DailyGameGuessResponse> {
+  const response = await fetch("/api/daily-game/guess", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await toError(response, "Failed to submit daily game guess");
+  }
+
+  return (await response.json()) as DailyGameGuessResponse;
+}
+
+export async function fetchDailyPriceGuessGame(): Promise<DailyPriceGuessChallengeResponse> {
+  const response = await fetch("/api/daily-price-guess");
+
+  if (!response.ok) {
+    throw await toError(response, "Failed to fetch daily price guess game");
+  }
+
+  return (await response.json()) as DailyPriceGuessChallengeResponse;
+}
+
+export async function submitDailyPriceGuess(
+  payload: DailyPriceGuessPayload,
+): Promise<DailyPriceGuessAttemptResponse> {
+  const response = await fetch("/api/daily-price-guess/guess", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await toError(response, "Failed to submit daily price guess");
+  }
+
+  return (await response.json()) as DailyPriceGuessAttemptResponse;
 }
