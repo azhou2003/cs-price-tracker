@@ -7,6 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Fast start
 
 - Use npm scripts from `package.json`: `npm run dev`, `npm run lint`, `npm run build`, `npm run start`.
+- Before considering a coding task complete, run `npm run build` and fix any failures.
 - There is no test script/config in this repo; do not invent Vitest/Jest/Playwright commands.
 - TypeScript path alias is configured: `@/* -> src/*` (`tsconfig.json`).
 

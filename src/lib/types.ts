@@ -20,6 +20,12 @@ export type PriceSnapshot = {
   volume?: number;
 };
 
+export type HistoryPoint = {
+  timestamp: string;
+  amount: number;
+  volume?: number;
+};
+
 export type WatchlistEntry = {
   marketHashName: string;
   displayName: string;
