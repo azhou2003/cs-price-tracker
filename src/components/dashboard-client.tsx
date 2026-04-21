@@ -11,10 +11,11 @@ import {
   DEFAULT_STATE,
   isTracked,
   loadLocalState,
+  removeFromWatchlist,
   saveLocalState,
   setWatchlistIcon,
 } from "@/lib/storage";
-import type { LocalState, MarketItem } from "@/lib/types";
+import type { LocalState, MarketItem, PriceSnapshot, WatchlistEntry } from "@/lib/types";
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -44,8 +45,18 @@ export function DashboardClient() {
   const [searchResults, setSearchResults] = useState<MarketItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [activeItem, setActiveItem] = useState<WatchlistEntry | null>(null);
+  const [activePrice, setActivePrice] = useState<PriceSnapshot | null>(null);
+  const [isRefreshingActive, setIsRefreshingActive] = useState(false);
+  const [activeError, setActiveError] = useState<string | null>(null);
 
   const watchlist = state.watchlist;
+  const resolvedActiveItem = activeItem
+    ? watchlist.find((item) => item.marketHashName === activeItem.marketHashName) ?? null
+    : null;
+  const activeHistory = activeItem
+    ? state.historyByItem[activeItem.marketHashName] ?? []
+    : [];
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -167,6 +178,74 @@ export function DashboardClient() {
     setState(nextState);
   };
 
+  const openItemModal = (item: WatchlistEntry) => {
+    setActiveItem(item);
+    setActiveError(null);
+    setActivePrice(state.historyByItem[item.marketHashName]?.at(-1) ?? null);
+  };
+
+  const refreshActiveItem = async () => {
+    if (!activeItem) {
+      return;
+    }
+
+    setIsRefreshingActive(true);
+    setActiveError(null);
+
+    try {
+      const snapshot = await fetchItemPrice(activeItem.marketHashName);
+      if (!snapshot) {
+        setActiveError("No price data available for this item right now.");
+        return;
+      }
+
+      const nextState = appendPriceSnapshot(loadLocalState(), snapshot);
+      saveLocalState(nextState);
+      setState(nextState);
+      setActivePrice(snapshot);
+    } catch (requestError) {
+      setActiveError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Failed to refresh this item",
+      );
+    } finally {
+      setIsRefreshingActive(false);
+    }
+  };
+
+  const removeActiveItem = () => {
+    if (!activeItem) {
+      return;
+    }
+
+    const nextState = removeFromWatchlist(loadLocalState(), activeItem.marketHashName);
+    saveLocalState(nextState);
+    setState(nextState);
+    setActiveItem(null);
+    setActivePrice(null);
+    setActiveError(null);
+  };
+
+  const graphPoints = (() => {
+    if (activeHistory.length < 2) {
+      return "";
+    }
+
+    const amounts = activeHistory.map((entry) => entry.amount);
+    const min = Math.min(...amounts);
+    const max = Math.max(...amounts);
+    const range = max - min || 1;
+
+    return activeHistory
+      .map((entry, index) => {
+        const x = (index / (activeHistory.length - 1)) * 100;
+        const y = 100 - ((entry.amount - min) / range) * 100;
+        return `${x},${y}`;
+      })
+      .join(" ");
+  })();
+
   return (
     <section className="space-y-4">
       <article className="rounded-2xl border border-sky-300/15 bg-slate-900/70 p-6">
@@ -274,9 +353,12 @@ export function DashboardClient() {
                   className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3"
                   key={item.marketHashName}
                 >
-                  <Link
-                    className="flex items-start justify-between gap-3 hover:text-sky-300"
-                    href={`/item/${encodeURIComponent(item.marketHashName)}`}
+                  <button
+                    className="flex w-full items-start justify-between gap-3 text-left hover:text-sky-300"
+                    onClick={() => {
+                      openItemModal(item);
+                    }}
+                    type="button"
                   >
                     <span className="flex items-start gap-3">
                       {item.iconUrl ? (
@@ -303,13 +385,112 @@ export function DashboardClient() {
                         ? latest.lowestPriceText ?? formatUsd(latest.amount)
                         : "No price yet"}
                     </span>
-                  </Link>
+                  </button>
                 </li>
               );
             })}
           </ul>
         )}
       </article>
+
+      {resolvedActiveItem ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4">
+          <article className="w-full max-w-2xl rounded-2xl border border-sky-300/20 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {resolvedActiveItem.iconUrl ? (
+                  <Image
+                    alt={resolvedActiveItem.displayName}
+                    className="rounded-md border border-slate-700 bg-slate-900"
+                    height={56}
+                    src={resolvedActiveItem.iconUrl}
+                    width={56}
+                  />
+                ) : (
+                  <span className="h-14 w-14 rounded-md border border-slate-700 bg-slate-900" />
+                )}
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-50">{resolvedActiveItem.displayName}</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Added {formatTimestamp(resolvedActiveItem.addedAt)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                className="rounded-full bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+                onClick={() => {
+                  setActiveItem(null);
+                  setActivePrice(null);
+                  setActiveError(null);
+                }}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className="rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-sky-400"
+                onClick={() => {
+                  void refreshActiveItem();
+                }}
+                type="button"
+              >
+                {isRefreshingActive ? "Refreshing..." : "Refresh Price"}
+              </button>
+              <button
+                className="rounded-full bg-rose-900/70 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-800"
+                onClick={removeActiveItem}
+                type="button"
+              >
+                Remove from Watchlist
+              </button>
+              <Link
+                className="rounded-full bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700"
+                href={`/item/${encodeURIComponent(resolvedActiveItem.marketHashName)}`}
+              >
+                Open Full Page
+              </Link>
+            </div>
+
+            {activeError ? <p className="mt-3 text-sm text-rose-300">{activeError}</p> : null}
+
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/60 p-4">
+              <p className="text-sm text-slate-300">Latest local snapshot</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-50">
+                {activePrice
+                  ? activePrice.lowestPriceText ?? formatUsd(activePrice.amount)
+                  : "No price yet"}
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/60 p-4">
+              <p className="text-sm text-slate-300">Local price graph</p>
+              {activeHistory.length < 2 ? (
+                <p className="mt-2 text-sm text-slate-400">
+                  Need at least 2 snapshots. Refresh this item a few times to build a trend.
+                </p>
+              ) : (
+                <div className="mt-3">
+                  <svg className="h-36 w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                    <polyline
+                      fill="none"
+                      points={graphPoints}
+                      stroke="rgb(56 189 248)"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                  <p className="mt-2 text-xs text-slate-400">
+                    {activeHistory.length} local snapshots shown (UTC)
+                  </p>
+                </div>
+              )}
+            </div>
+          </article>
+        </div>
+      ) : null}
     </section>
   );
 }
