@@ -17,8 +17,15 @@ function formatUsd(value: number) {
   }).format(value);
 }
 
-function formatPercent(value: number) {
-  return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
+function formatDeltaText(delta: number, targetType: "low" | "high") {
+  if (Math.abs(delta) < 0.005) {
+    return "At target";
+  }
+
+  const amountText = formatUsd(Math.abs(delta));
+  const direction = delta > 0 ? "above" : "below";
+  const label = targetType === "low" ? "low target" : "high target";
+  return `${amountText} ${direction} ${label}`;
 }
 
 export function WatchlistTargetShowcase({
@@ -33,20 +40,29 @@ export function WatchlistTargetShowcase({
           return null;
         }
 
-        const distances: Array<{ targetType: "low" | "high"; relative: number; target: number }> = [];
+        const distances: Array<{
+          targetType: "low" | "high";
+          absoluteDistance: number;
+          delta: number;
+          target: number;
+        }> = [];
 
         if (item.lowAlert != null && item.lowAlert > 0) {
+          const delta = latest.amount - item.lowAlert;
           distances.push({
             targetType: "low",
-            relative: Math.abs(latest.amount - item.lowAlert) / item.lowAlert,
+            absoluteDistance: Math.abs(delta),
+            delta,
             target: item.lowAlert,
           });
         }
 
         if (item.highAlert != null && item.highAlert > 0) {
+          const delta = latest.amount - item.highAlert;
           distances.push({
             targetType: "high",
-            relative: Math.abs(latest.amount - item.highAlert) / item.highAlert,
+            absoluteDistance: Math.abs(delta),
+            delta,
             target: item.highAlert,
           });
         }
@@ -55,7 +71,9 @@ export function WatchlistTargetShowcase({
           return null;
         }
 
-        const nearest = distances.sort((left, right) => left.relative - right.relative)[0];
+        const nearest = distances.sort(
+          (left, right) => left.absoluteDistance - right.absoluteDistance,
+        )[0];
 
         return {
           item,
@@ -69,10 +87,17 @@ export function WatchlistTargetShowcase({
         ): entry is {
           item: WatchlistEntry;
           latest: PriceSnapshot;
-          nearest: { targetType: "low" | "high"; relative: number; target: number };
+          nearest: {
+            targetType: "low" | "high";
+            absoluteDistance: number;
+            delta: number;
+            target: number;
+          };
         } => entry !== null,
       )
-      .sort((left, right) => left.nearest.relative - right.nearest.relative)
+      .sort(
+        (left, right) => right.nearest.absoluteDistance - left.nearest.absoluteDistance,
+      )
       .slice(0, 3);
   }, [historyByItem, watchlist]);
 
@@ -83,8 +108,7 @@ export function WatchlistTargetShowcase({
   return (
     <article className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-6 shadow-[0_12px_26px_rgba(0,0,0,0.34)]">
       <p className="text-[11px] uppercase tracking-[0.22em] text-[#89a9c3]">Watchlist Focus</p>
-      <h2 className="mt-1 text-xl font-semibold text-[#d9e7f5]">Closest To Targets</h2>
-      <ul className="mt-4 grid gap-2 md:grid-cols-3">
+      <ul className="mt-3 grid gap-2 md:grid-cols-3">
         {topTargetProximity.map((entry) => (
           <li
             className="rounded-md border border-[#2d3f52] bg-[#111b27]/85 px-3 py-2"
@@ -108,7 +132,7 @@ export function WatchlistTargetShowcase({
                   {entry.nearest.targetType === "low" ? "Low" : "High"} target {formatUsd(entry.nearest.target)}
                 </p>
                 <p className="mt-1 text-xs text-[#89a9c3]">
-                  {formatPercent(entry.nearest.relative)} away ({formatUsd(entry.latest.amount)})
+                  {formatDeltaText(entry.nearest.delta, entry.nearest.targetType)} ({formatUsd(entry.latest.amount)})
                 </p>
               </div>
             </div>

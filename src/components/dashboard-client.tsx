@@ -18,8 +18,8 @@ import {
 } from "@/lib/storage";
 import type { LocalState, MarketItem, PriceSnapshot, WatchlistEntry } from "@/lib/types";
 
-type WatchlistFilter = "all" | "triggered" | "below" | "above";
-type AlertStatus = "none" | "below" | "above" | "both";
+type WatchlistFilter = "all" | "triggered" | "buy" | "sell";
+type AlertStatus = "none" | "buy" | "sell" | "both";
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -68,28 +68,28 @@ function getAlertStatus(item: WatchlistEntry, latestAmount: number | null): Aler
   }
 
   if (isBelow) {
-    return "below";
+    return "buy";
   }
 
   if (isAbove) {
-    return "above";
+    return "sell";
   }
 
   return "none";
 }
 
 function getStatusBadge(status: AlertStatus) {
-  if (status === "below") {
+  if (status === "buy") {
     return {
-      label: "Below lower target",
+      label: "Buy",
       className:
         "border-[#3d5f2f] bg-gradient-to-b from-[#2d4723] to-[#243a1d] text-[#b7d88d]",
     };
   }
 
-  if (status === "above") {
+  if (status === "sell") {
     return {
-      label: "Above upper target",
+      label: "Sell",
       className:
         "border-[#6a5330] bg-gradient-to-b from-[#4f3e24] to-[#3f311d] text-[#e8c78d]",
     };
@@ -97,7 +97,7 @@ function getStatusBadge(status: AlertStatus) {
 
   if (status === "both") {
     return {
-      label: "Outside both targets",
+      label: "Buy + Sell",
       className:
         "border-[#6b4040] bg-gradient-to-b from-[#4f2c2c] to-[#3f2424] text-[#e9b0b0]",
     };
@@ -149,12 +149,12 @@ export function DashboardClient() {
         return status !== "none";
       }
 
-      if (watchlistFilter === "below") {
-        return status === "below" || status === "both";
+      if (watchlistFilter === "buy") {
+        return status === "buy" || status === "both";
       }
 
-      if (watchlistFilter === "above") {
-        return status === "above" || status === "both";
+      if (watchlistFilter === "sell") {
+        return status === "sell" || status === "both";
       }
 
       return true;
@@ -519,8 +519,8 @@ export function DashboardClient() {
                 {([
                   { key: "all", label: "All" },
                   { key: "triggered", label: "Triggered" },
-                  { key: "below", label: "Below lower" },
-                  { key: "above", label: "Above upper" },
+                  { key: "buy", label: "Buy" },
+                  { key: "sell", label: "Sell" },
                 ] as const).map((option) => {
                   const isActive = watchlistFilter === option.key;
                   const isTriggeredFilter = option.key === "triggered";

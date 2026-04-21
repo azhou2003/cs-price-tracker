@@ -13,6 +13,7 @@ import type {
   DailyGameChallengeResponse,
   DailyGameGuessResponse,
   DailyGameItem,
+  DailyGameResultItem,
   DailyGameStatsState,
 } from "@/lib/types";
 
@@ -118,6 +119,38 @@ function formatUsd(value: number) {
   }).format(value);
 }
 
+function isSavedResultCompatible(
+  items: DailyGameItem[],
+  result: DailyGameGuessResponse | undefined,
+) {
+  if (!result) {
+    return false;
+  }
+
+  return hasSameHashes(items, result.correctOrder);
+}
+
+function hasSameHashes(items: DailyGameItem[], rankedItems: DailyGameResultItem[]) {
+  if (items.length !== rankedItems.length) {
+    return false;
+  }
+
+  const itemHashes = new Set(items.map((item) => item.marketHashName));
+  const rankedHashes = new Set(rankedItems.map((item) => item.marketHashName));
+
+  if (itemHashes.size !== rankedHashes.size) {
+    return false;
+  }
+
+  for (const hash of itemHashes) {
+    if (!rankedHashes.has(hash)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function DailyPriceGame() {
   const [challenge, setChallenge] = useState<DailyGameChallengeResponse | null>(null);
   const [orderedItems, setOrderedItems] = useState<DailyGameItem[]>([]);
@@ -139,8 +172,14 @@ export function DailyPriceGame() {
       const todayKey = getUtcDayKeyNow();
       const savedToday = loadSavedResult(todayKey);
       if (savedToday?.challenge && savedToday.challenge.dayKey === todayKey) {
+        const savedResult = isSavedResultCompatible(
+          savedToday.challenge.items,
+          savedToday.result,
+        )
+          ? savedToday.result
+          : null;
         const savedOrder =
-          savedToday.orderedMarketHashNames ?? savedToday.result.submittedOrder;
+          savedToday.orderedMarketHashNames ?? savedResult?.submittedOrder;
         const ordered = savedOrder
           ? savedOrder
               .map((hash) =>
@@ -159,7 +198,7 @@ export function DailyPriceGame() {
               ? ordered
               : savedToday.challenge.items,
           );
-          setResult(savedToday.result);
+          setResult(savedResult);
           setIsLoading(false);
         }
 
@@ -173,7 +212,11 @@ export function DailyPriceGame() {
         }
 
         const saved = loadSavedResult(nextChallenge.dayKey);
-        const savedOrder = saved?.orderedMarketHashNames ?? saved?.result.submittedOrder;
+        const savedResult: DailyGameGuessResponse | null =
+          saved && isSavedResultCompatible(nextChallenge.items, saved.result)
+            ? saved.result
+            : null;
+        const savedOrder = saved?.orderedMarketHashNames ?? savedResult?.submittedOrder;
         const ordered = savedOrder
           ? savedOrder
               .map((hash) =>
@@ -187,7 +230,7 @@ export function DailyPriceGame() {
         setOrderedItems(
           ordered.length === nextChallenge.items.length ? ordered : nextChallenge.items,
         );
-        setResult(saved?.result ?? null);
+        setResult(savedResult);
       } catch (requestError) {
         if (!cancelled) {
           setError(
@@ -442,7 +485,7 @@ export function DailyPriceGame() {
                             {(() => {
                               const priced = resultByHash?.get(item.marketHashName);
                               if (!priced) {
-                                return "";
+                                return "Price unavailable";
                               }
 
                               return priced.priceText ?? formatUsd(priced.amount);
