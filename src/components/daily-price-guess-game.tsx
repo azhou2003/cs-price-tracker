@@ -488,6 +488,7 @@ export function DailyPriceGuessGame() {
         onClose={() => {
           setIsShareOpen(false);
         }}
+        title="Daily Price Guess"
         shareText={shareText}
         shareUrl={shareUrl}
         subtitle="Share your guesses and challenge friends."

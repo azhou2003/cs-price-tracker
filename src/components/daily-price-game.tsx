@@ -859,6 +859,7 @@ export function DailyPriceGame() {
               onClose={() => {
                 setIsShareOpen(false);
               }}
+              title="Daily Order By Price"
               shareText={shareText}
               shareUrl={shareUrl}
               subtitle="Challenge your friends with today's lineup."
