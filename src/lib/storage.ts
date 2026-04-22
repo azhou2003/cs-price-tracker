@@ -5,6 +5,10 @@ import type {
   PriceSnapshot,
   WatchlistEntry,
 } from "@/lib/types";
+import {
+  DEFAULT_DAILY_GAME_ITEM_TYPES,
+  normalizeDailyGameItemTypes,
+} from "@/lib/daily-game-item-types";
 
 const STORAGE_KEY = "cs-price-tracker:v1";
 const APP_STORAGE_KEY_PREFIX = "cs-price-tracker:";
@@ -23,6 +27,7 @@ const DEFAULT_STATE: LocalState = {
     autoRefreshEnabled: true,
     refreshIntervalMinutes: 10,
     currency: "USD",
+    dailyGameIncludedTypes: [...DEFAULT_DAILY_GAME_ITEM_TYPES],
   },
 };
 
@@ -171,10 +176,13 @@ function toImportableLocalState(value: unknown): LocalState {
     ...value,
     watchlist: parsedWatchlist as LocalState["watchlist"],
     historyByItem: parsedHistoryByItem,
-    settings: {
-      ...DEFAULT_STATE.settings,
-      ...parsedSettings,
-    },
+      settings: {
+        ...DEFAULT_STATE.settings,
+        ...parsedSettings,
+        dailyGameIncludedTypes: normalizeDailyGameItemTypes(
+          parsedSettings.dailyGameIncludedTypes,
+        ),
+      },
   });
 }
 
@@ -223,6 +231,9 @@ export function loadLocalState(): LocalState {
       settings: {
         ...DEFAULT_STATE.settings,
         ...parsed.settings,
+        dailyGameIncludedTypes: normalizeDailyGameItemTypes(
+          parsed.settings?.dailyGameIncludedTypes,
+        ),
       },
     });
   } catch {

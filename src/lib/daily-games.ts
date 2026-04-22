@@ -1,9 +1,17 @@
-import { fetchSteamPrice, searchSteamItems } from "@/lib/steam";
+import {
+  classifyDailyGameItemType,
+  dailyGameItemTypesKey,
+  DEFAULT_DAILY_GAME_ITEM_TYPES,
+  normalizeDailyGameItemTypes,
+} from "@/lib/daily-game-item-types";
+import { fetchSteamMarketSlice, fetchSteamPrice } from "@/lib/steam";
+import type { DailyGameItemType } from "@/lib/types";
 
 type DailyGamePriceEntry = {
   marketHashName: string;
   displayName: string;
   iconUrl?: string;
+  marketType?: string;
   amount: number;
   lowestPriceText?: string;
 };
@@ -12,6 +20,7 @@ export type DailyOrderByPriceChallenge = {
   dayKey: string;
   generatedAt: string;
   expiresAt: string;
+  includedTypes: DailyGameItemType[];
   items: DailyGamePriceEntry[];
 };
 
@@ -19,37 +28,34 @@ export type DailyPriceGuessChallenge = {
   dayKey: string;
   generatedAt: string;
   expiresAt: string;
+  includedTypes: DailyGameItemType[];
   item: DailyGamePriceEntry;
 };
 
 const DAILY_ITEM_COUNT = 5;
+const STEAM_MARKET_PAGE_SIZE = 10;
+const MAX_MARKET_OFFSETS_TO_SCAN = 1400;
 
-const QUERY_POOL = [
-  "AK-47",
-  "AWP",
-  "M4A1-S",
-  "M4A4",
-  "Desert Eagle",
-  "USP-S",
-  "Glock-18",
-  "P250",
-  "FAMAS",
-  "Galil AR",
-  "MAC-10",
-  "MP9",
-  "UMP-45",
-  "P90",
-  "Five-SeveN",
-  "CZ75-Auto",
-  "SSG 08",
-  "AUG",
-  "SG 553",
-  "Nova",
-  "XM1014",
-];
+type DailyGameSelectionOptions = {
+  includedTypes: DailyGameItemType[];
+};
 
 const DAILY_ORDER_BY_PRICE_CACHE = new Map<string, DailyOrderByPriceChallenge>();
 const DAILY_PRICE_GUESS_CACHE = new Map<string, DailyPriceGuessChallenge>();
+
+function toSelectionOptions(
+  options?: Partial<DailyGameSelectionOptions>,
+): DailyGameSelectionOptions {
+  return {
+    includedTypes: normalizeDailyGameItemTypes(
+      options?.includedTypes ?? DEFAULT_DAILY_GAME_ITEM_TYPES,
+    ),
+  };
+}
+
+function createChallengeCacheKey(dayKey: string, options: DailyGameSelectionOptions) {
+  return `${dayKey}|${dailyGameItemTypesKey(options.includedTypes)}`;
+}
 
 function getUtcDayKey(value = new Date()) {
   const year = value.getUTCFullYear();
@@ -101,41 +107,95 @@ function shuffle<T>(items: T[], seedText: string) {
   return next;
 }
 
-async function getPricedCandidates(dayKey: string, targetCount: number) {
-  const orderedQueries = shuffle(QUERY_POOL, `${dayKey}:queries`);
-  const candidates = new Map<
-    string,
-    { marketHashName: string; displayName: string; iconUrl?: string }
-  >();
+function gcd(left: number, right: number) {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
 
-  for (const query of orderedQueries) {
-    const results = await searchSteamItems(query, 24);
-    for (const result of shuffle(results, `${dayKey}:result:${query}`)) {
-      if (!result.marketHashName || candidates.has(result.marketHashName)) {
-        continue;
-      }
+  while (b !== 0) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
 
-      candidates.set(result.marketHashName, {
-        marketHashName: result.marketHashName,
-        displayName: result.displayName,
-        iconUrl: result.iconUrl,
-      });
-    }
+  return a;
+}
 
-    if (candidates.size >= 28) {
-      break;
+function buildDeterministicMarketOffsets(dayKey: string, totalCount: number, limit: number) {
+  if (totalCount <= 0) {
+    return [];
+  }
+
+  if (totalCount === 1) {
+    return [0];
+  }
+
+  const start = seedFromText(`${dayKey}:market:start`) % totalCount;
+  let step = (seedFromText(`${dayKey}:market:step`) % (totalCount - 1)) + 1;
+
+  while (gcd(step, totalCount) !== 1) {
+    step = (step + 1) % totalCount;
+    if (step === 0) {
+      step = 1;
     }
   }
 
+  const max = Math.min(totalCount, limit);
+  const offsets: number[] = [];
+
+  for (let index = 0; index < max; index += 1) {
+    offsets.push((start + index * step) % totalCount);
+  }
+
+  return offsets;
+}
+
+async function getPricedCandidates(
+  dayKey: string,
+  targetCount: number,
+  options: DailyGameSelectionOptions,
+) {
   const picked: DailyGamePriceEntry[] = [];
-  const shuffledCandidates = shuffle(
-    [...candidates.values()],
-    `${dayKey}:candidates`,
+  const requestedTypes = new Set(options.includedTypes);
+  const seenHashes = new Set<string>();
+
+  const pageCache = new Map<number, Awaited<ReturnType<typeof fetchSteamMarketSlice>>>();
+  const firstPage = await fetchSteamMarketSlice(0, STEAM_MARKET_PAGE_SIZE);
+  pageCache.set(0, firstPage);
+
+  if (firstPage.totalCount <= 0) {
+    return picked;
+  }
+
+  const offsets = buildDeterministicMarketOffsets(
+    dayKey,
+    firstPage.totalCount,
+    MAX_MARKET_OFFSETS_TO_SCAN,
   );
 
-  for (const candidate of shuffledCandidates) {
+  for (const offset of offsets) {
     if (picked.length >= targetCount) {
       break;
+    }
+
+    const pageStart =
+      Math.floor(offset / STEAM_MARKET_PAGE_SIZE) * STEAM_MARKET_PAGE_SIZE;
+    const pageOffset = offset - pageStart;
+
+    let page = pageCache.get(pageStart);
+    if (!page) {
+      page = await fetchSteamMarketSlice(pageStart, STEAM_MARKET_PAGE_SIZE);
+      pageCache.set(pageStart, page);
+    }
+
+    const candidate = page.results[pageOffset];
+    if (!candidate || !candidate.marketHashName || seenHashes.has(candidate.marketHashName)) {
+      continue;
+    }
+    seenHashes.add(candidate.marketHashName);
+
+    const classifiedType = classifyDailyGameItemType(candidate.marketType);
+    if (!requestedTypes.has(classifiedType)) {
+      continue;
     }
 
     const price = await fetchSteamPrice(candidate.marketHashName);
@@ -143,14 +203,11 @@ async function getPricedCandidates(dayKey: string, targetCount: number) {
       continue;
     }
 
-    if (picked.some((item) => item.marketHashName === candidate.marketHashName)) {
-      continue;
-    }
-
     picked.push({
       marketHashName: candidate.marketHashName,
       displayName: candidate.displayName,
       iconUrl: candidate.iconUrl,
+      marketType: candidate.marketType,
       amount: price.amount,
       lowestPriceText: price.lowestPriceText,
     });
@@ -159,9 +216,12 @@ async function getPricedCandidates(dayKey: string, targetCount: number) {
   return picked;
 }
 
-async function buildDailyOrderByPriceChallenge(dayKey: string): Promise<DailyOrderByPriceChallenge> {
+async function buildDailyOrderByPriceChallenge(
+  dayKey: string,
+  options: DailyGameSelectionOptions,
+): Promise<DailyOrderByPriceChallenge> {
   const { start, end } = dayBounds(dayKey);
-  const picked = await getPricedCandidates(dayKey, DAILY_ITEM_COUNT);
+  const picked = await getPricedCandidates(dayKey, DAILY_ITEM_COUNT, options);
 
   if (picked.length < DAILY_ITEM_COUNT) {
     throw new Error("Unable to build daily order by price game with five priced items");
@@ -173,15 +233,17 @@ async function buildDailyOrderByPriceChallenge(dayKey: string): Promise<DailyOrd
     dayKey,
     generatedAt: start.toISOString(),
     expiresAt: end.toISOString(),
+    includedTypes: options.includedTypes,
     items: finalItems,
   };
 }
 
 async function buildDailyPriceGuessChallenge(
   dayKey: string,
+  options: DailyGameSelectionOptions,
 ): Promise<DailyPriceGuessChallenge> {
   const { start, end } = dayBounds(dayKey);
-  const picked = await getPricedCandidates(`${dayKey}:price-guess`, 1);
+  const picked = await getPricedCandidates(`${dayKey}:price-guess`, 1, options);
 
   if (picked.length === 0) {
     throw new Error("Unable to build daily price guess game");
@@ -191,19 +253,26 @@ async function buildDailyPriceGuessChallenge(
     dayKey,
     generatedAt: start.toISOString(),
     expiresAt: end.toISOString(),
+    includedTypes: options.includedTypes,
     item: picked[0],
   };
 }
 
-export async function getOrCreateDailyOrderByPriceChallenge(dayKey = getUtcDayKey()) {
-  const cached = DAILY_ORDER_BY_PRICE_CACHE.get(dayKey);
+export async function getOrCreateDailyOrderByPriceChallenge(
+  dayKey = getUtcDayKey(),
+  options?: Partial<DailyGameSelectionOptions>,
+) {
+  const resolvedOptions = toSelectionOptions(options);
+  const cacheKey = createChallengeCacheKey(dayKey, resolvedOptions);
+
+  const cached = DAILY_ORDER_BY_PRICE_CACHE.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const challenge = await buildDailyOrderByPriceChallenge(dayKey);
+  const challenge = await buildDailyOrderByPriceChallenge(dayKey, resolvedOptions);
   DAILY_ORDER_BY_PRICE_CACHE.clear();
-  DAILY_ORDER_BY_PRICE_CACHE.set(dayKey, challenge);
+  DAILY_ORDER_BY_PRICE_CACHE.set(cacheKey, challenge);
   return challenge;
 }
 
@@ -217,15 +286,21 @@ export function getDailyOrderByPriceCorrectOrder(challenge: DailyOrderByPriceCha
   });
 }
 
-export async function getOrCreateDailyPriceGuessChallenge(dayKey = getUtcDayKey()) {
-  const cached = DAILY_PRICE_GUESS_CACHE.get(dayKey);
+export async function getOrCreateDailyPriceGuessChallenge(
+  dayKey = getUtcDayKey(),
+  options?: Partial<DailyGameSelectionOptions>,
+) {
+  const resolvedOptions = toSelectionOptions(options);
+  const cacheKey = createChallengeCacheKey(dayKey, resolvedOptions);
+
+  const cached = DAILY_PRICE_GUESS_CACHE.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const challenge = await buildDailyPriceGuessChallenge(dayKey);
+  const challenge = await buildDailyPriceGuessChallenge(dayKey, resolvedOptions);
   DAILY_PRICE_GUESS_CACHE.clear();
-  DAILY_PRICE_GUESS_CACHE.set(dayKey, challenge);
+  DAILY_PRICE_GUESS_CACHE.set(cacheKey, challenge);
   return challenge;
 }
 

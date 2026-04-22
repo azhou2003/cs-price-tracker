@@ -5,11 +5,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { GameShareOverlay } from "@/components/game-share-overlay";
 import {
+  dailyGameItemTypesKey,
+  normalizeDailyGameItemTypes,
+} from "@/lib/daily-game-item-types";
+import {
   fetchDailyPriceGuessGame,
 } from "@/lib/api-client";
 import {
   DAILY_PRICE_GUESS_STATE_KEY,
   loadDailyGameStats,
+  loadLocalState,
   recordDailyGameResult,
 } from "@/lib/storage";
 import type {
@@ -25,12 +30,14 @@ const EMPTY_STATS: DailyGameStatsState = {
 
 type SavedDailyPriceGuessState = {
   dayKey: string;
+  includedTypesKey?: string;
   attempts: DailyPriceGuessAttemptResponse[];
   challenge?: DailyPriceGuessChallengeResponse;
 };
 
 type SavedDailyPriceGuessChallengeCache = {
   dayKey: string;
+  includedTypesKey?: string;
   challenge: DailyPriceGuessChallengeResponse;
 };
 
@@ -54,7 +61,15 @@ function isGameComplete(
   return attempts.some((attempt) => attempt.isCorrect) || attempts.length >= maxAttempts;
 }
 
-function loadSavedState(dayKey: string) {
+function getIncludedTypesKey(challenge?: DailyPriceGuessChallengeResponse) {
+  if (!challenge) {
+    return null;
+  }
+
+  return dailyGameItemTypesKey(normalizeDailyGameItemTypes(challenge.includedTypes));
+}
+
+function loadSavedState(dayKey: string, includedTypesKey: string) {
   if (typeof window === "undefined") {
     return null;
   }
@@ -66,7 +81,12 @@ function loadSavedState(dayKey: string) {
 
   try {
     const parsed = JSON.parse(raw) as SavedDailyPriceGuessState;
-    if (parsed.dayKey !== dayKey || !Array.isArray(parsed.attempts)) {
+    const parsedIncludedTypesKey = parsed.includedTypesKey ?? getIncludedTypesKey(parsed.challenge);
+    if (
+      parsed.dayKey !== dayKey ||
+      parsedIncludedTypesKey !== includedTypesKey ||
+      !Array.isArray(parsed.attempts)
+    ) {
       return null;
     }
 
@@ -78,6 +98,7 @@ function loadSavedState(dayKey: string) {
 
 function saveState(
   dayKey: string,
+  includedTypesKey: string,
   attempts: DailyPriceGuessAttemptResponse[],
   challenge: DailyPriceGuessChallengeResponse,
 ) {
@@ -89,13 +110,14 @@ function saveState(
     DAILY_PRICE_GUESS_STATE_KEY,
     JSON.stringify({
       dayKey,
+      includedTypesKey,
       attempts,
       challenge,
     } satisfies SavedDailyPriceGuessState),
   );
 }
 
-function loadCachedChallenge(dayKey: string) {
+function loadCachedChallenge(dayKey: string, includedTypesKey: string) {
   if (typeof window === "undefined") {
     return null;
   }
@@ -107,7 +129,9 @@ function loadCachedChallenge(dayKey: string) {
 
   try {
     const parsed = JSON.parse(raw) as SavedDailyPriceGuessChallengeCache;
-    if (parsed.dayKey !== dayKey || !parsed.challenge) {
+    const parsedIncludedTypesKey =
+      parsed.includedTypesKey ?? getIncludedTypesKey(parsed.challenge);
+    if (parsed.dayKey !== dayKey || parsedIncludedTypesKey !== includedTypesKey || !parsed.challenge) {
       return null;
     }
 
@@ -126,6 +150,7 @@ function saveCachedChallenge(challenge: DailyPriceGuessChallengeResponse) {
     DAILY_PRICE_GUESS_CHALLENGE_CACHE_KEY,
     JSON.stringify({
       dayKey: challenge.dayKey,
+      includedTypesKey: dailyGameItemTypesKey(challenge.includedTypes),
       challenge,
     } satisfies SavedDailyPriceGuessChallengeCache),
   );
@@ -187,7 +212,9 @@ export function DailyPriceGuessGame() {
       setError(null);
 
       const todayKey = getUtcDayKeyNow();
-      const savedToday = loadSavedState(todayKey);
+      const includedTypes = loadLocalState().settings.dailyGameIncludedTypes;
+      const includedTypesKey = dailyGameItemTypesKey(includedTypes);
+      const savedToday = loadSavedState(todayKey, includedTypesKey);
 
       if (
         savedToday?.challenge &&
@@ -207,7 +234,7 @@ export function DailyPriceGuessGame() {
       const cachedChallenge =
         savedToday?.challenge && savedToday.challenge.dayKey === todayKey
           ? savedToday.challenge
-          : loadCachedChallenge(todayKey);
+          : loadCachedChallenge(todayKey, includedTypesKey);
 
       if (cachedChallenge && hasClientCheckData(cachedChallenge)) {
         if (!cancelled) {
@@ -223,14 +250,14 @@ export function DailyPriceGuessGame() {
       }
 
       try {
-        const nextChallenge = await fetchDailyPriceGuessGame();
+        const nextChallenge = await fetchDailyPriceGuessGame(includedTypes);
         if (cancelled) {
           return;
         }
 
         saveCachedChallenge(nextChallenge);
 
-        const saved = loadSavedState(nextChallenge.dayKey);
+        const saved = loadSavedState(nextChallenge.dayKey, includedTypesKey);
         setStats(loadDailyGameStats());
         setChallenge(nextChallenge);
         setAttempts(saved?.attempts ?? []);
@@ -348,7 +375,12 @@ export function DailyPriceGuessGame() {
 
       setAttempts(nextAttempts);
       setGuessInput("");
-      saveState(challenge.dayKey, nextAttempts, challenge);
+      saveState(
+        challenge.dayKey,
+        dailyGameItemTypesKey(challenge.includedTypes),
+        nextAttempts,
+        challenge,
+      );
 
       if (completed) {
         setIsShareOpen(true);

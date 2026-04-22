@@ -1,9 +1,11 @@
 import type {
+  DailyGameItemType,
   DailyOrderByPriceChallengeResponse,
   DailyPriceGuessChallengeResponse,
   MarketItem,
   PriceSnapshot,
 } from "@/lib/types";
+import { toDailyGameItemTypesParam } from "@/lib/daily-game-item-types";
 
 type SearchResponse = {
   results: MarketItem[];
@@ -75,8 +77,17 @@ export async function fetchItemMeta(
   return data.item;
 }
 
-export async function fetchDailyOrderByPriceGame(): Promise<DailyOrderByPriceChallengeResponse> {
-  const response = await fetch("/api/daily-order-by-price");
+export async function fetchDailyOrderByPriceGame(
+  includedTypes?: readonly DailyGameItemType[],
+): Promise<DailyOrderByPriceChallengeResponse> {
+  const params = new URLSearchParams();
+  if (includedTypes && includedTypes.length > 0) {
+    params.set("types", toDailyGameItemTypesParam(includedTypes));
+  }
+
+  const response = await fetch(
+    `/api/daily-order-by-price${params.size > 0 ? `?${params.toString()}` : ""}`,
+  );
 
   if (!response.ok) {
     throw await toError(response, "Failed to fetch daily order by price game");
@@ -85,8 +96,17 @@ export async function fetchDailyOrderByPriceGame(): Promise<DailyOrderByPriceCha
   return (await response.json()) as DailyOrderByPriceChallengeResponse;
 }
 
-export async function fetchDailyPriceGuessGame(): Promise<DailyPriceGuessChallengeResponse> {
-  const response = await fetch("/api/daily-price-guess");
+export async function fetchDailyPriceGuessGame(
+  includedTypes?: readonly DailyGameItemType[],
+): Promise<DailyPriceGuessChallengeResponse> {
+  const params = new URLSearchParams();
+  if (includedTypes && includedTypes.length > 0) {
+    params.set("types", toDailyGameItemTypesParam(includedTypes));
+  }
+
+  const response = await fetch(
+    `/api/daily-price-guess${params.size > 0 ? `?${params.toString()}` : ""}`,
+  );
 
   if (!response.ok) {
     throw await toError(response, "Failed to fetch daily price guess game");

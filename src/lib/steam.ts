@@ -11,11 +11,13 @@ type SearchApiResult = {
   sell_price_text?: string;
   asset_description?: {
     icon_url?: string;
+    type?: string;
   };
 };
 
 type SearchApiResponse = {
   success?: boolean;
+  total_count?: number;
   results?: SearchApiResult[];
 };
 
@@ -65,6 +67,26 @@ async function fetchJson<T>(url: URL) {
   return (await response.json()) as T;
 }
 
+function toMarketItem(item: SearchApiResult): MarketItem | null {
+  const marketHashName = item.hash_name?.trim();
+  const displayName = item.name?.trim() ?? marketHashName;
+
+  if (!marketHashName || !displayName) {
+    return null;
+  }
+
+  return {
+    marketHashName,
+    displayName,
+    iconUrl: toIconUrl(item.asset_description?.icon_url),
+    marketType: item.asset_description?.type,
+    listingCount: item.sell_listings,
+    startingPrice:
+      typeof item.sell_price === "number" ? item.sell_price / 100 : undefined,
+    startingPriceText: item.sell_price_text,
+  };
+}
+
 export async function searchSteamItems(query: string, limit = 20) {
   const url = new URL(SEARCH_ENDPOINT);
   url.searchParams.set("query", query);
@@ -80,25 +102,34 @@ export async function searchSteamItems(query: string, limit = 20) {
   const results = Array.isArray(data.results) ? data.results : [];
 
   return results
-    .map((item): MarketItem | null => {
-      const marketHashName = item.hash_name?.trim();
-      const displayName = item.name?.trim() ?? marketHashName;
-
-      if (!marketHashName || !displayName) {
-        return null;
-      }
-
-      return {
-        marketHashName,
-        displayName,
-        iconUrl: toIconUrl(item.asset_description?.icon_url),
-        listingCount: item.sell_listings,
-        startingPrice:
-          typeof item.sell_price === "number" ? item.sell_price / 100 : undefined,
-        startingPriceText: item.sell_price_text,
-      };
-    })
+    .map((item) => toMarketItem(item))
     .filter((item): item is MarketItem => item !== null);
+}
+
+export async function fetchSteamMarketSlice(start: number, count = 10) {
+  const url = new URL(SEARCH_ENDPOINT);
+  url.searchParams.set("query", "");
+  url.searchParams.set("start", String(Math.max(0, Math.floor(start))));
+  url.searchParams.set("count", String(Math.max(1, Math.floor(count))));
+  url.searchParams.set("search_descriptions", "0");
+  url.searchParams.set("sort_column", "name");
+  url.searchParams.set("sort_dir", "asc");
+  url.searchParams.set("appid", "730");
+  url.searchParams.set("norender", "1");
+
+  const data = await fetchJson<SearchApiResponse>(url);
+  const totalCount =
+    typeof data.total_count === "number" && Number.isFinite(data.total_count)
+      ? Math.max(0, Math.floor(data.total_count))
+      : 0;
+  const results = Array.isArray(data.results) ? data.results : [];
+
+  return {
+    totalCount,
+    results: results
+      .map((item) => toMarketItem(item))
+      .filter((item): item is MarketItem => item !== null),
+  };
 }
 
 export async function fetchSteamItemByHash(marketHashName: string) {

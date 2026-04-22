@@ -3,6 +3,11 @@
 import { type ChangeEvent, useEffect, useState } from "react";
 
 import {
+  DAILY_GAME_ITEM_TYPE_VALUES,
+  DEFAULT_DAILY_GAME_ITEM_TYPES,
+  normalizeDailyGameItemTypes,
+} from "@/lib/daily-game-item-types";
+import {
   clearLocalState,
   DEFAULT_STATE,
   exportBackupPayload,
@@ -11,6 +16,17 @@ import {
   saveLocalState,
   updateSettings,
 } from "@/lib/storage";
+import type { DailyGameItemType } from "@/lib/types";
+
+const DAILY_GAME_TYPE_LABELS: Record<DailyGameItemType, string> = {
+  weapon: "Weapon skins",
+  "knife-glove": "Knives + gloves",
+  agent: "Agents",
+  "sticker-patch": "Stickers + patches",
+  charm: "Charms",
+  container: "Cases + capsules",
+  other: "Other items",
+};
 
 export function SettingsPageClient() {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(
@@ -18,6 +34,9 @@ export function SettingsPageClient() {
   );
   const [refreshMinutes, setRefreshMinutes] = useState(
     DEFAULT_STATE.settings.refreshIntervalMinutes,
+  );
+  const [dailyGameIncludedTypes, setDailyGameIncludedTypes] = useState<DailyGameItemType[]>(
+    DEFAULT_DAILY_GAME_ITEM_TYPES,
   );
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
@@ -29,6 +48,9 @@ export function SettingsPageClient() {
       const state = loadLocalState();
       setAutoRefreshEnabled(state.settings.autoRefreshEnabled);
       setRefreshMinutes(state.settings.refreshIntervalMinutes);
+      setDailyGameIncludedTypes(
+        normalizeDailyGameItemTypes(state.settings.dailyGameIncludedTypes),
+      );
     }, 0);
 
     return () => {
@@ -41,6 +63,7 @@ export function SettingsPageClient() {
     const next = updateSettings(current, {
       autoRefreshEnabled,
       refreshIntervalMinutes: Math.min(Math.max(refreshMinutes, 1), 120),
+      dailyGameIncludedTypes: normalizeDailyGameItemTypes(dailyGameIncludedTypes),
     });
 
     saveLocalState(next);
@@ -62,6 +85,7 @@ export function SettingsPageClient() {
     clearLocalState();
     setAutoRefreshEnabled(DEFAULT_STATE.settings.autoRefreshEnabled);
     setRefreshMinutes(DEFAULT_STATE.settings.refreshIntervalMinutes);
+    setDailyGameIncludedTypes(DEFAULT_DAILY_GAME_ITEM_TYPES);
     setSaved(false);
     setCleared(true);
     window.setTimeout(() => {
@@ -107,6 +131,9 @@ export function SettingsPageClient() {
       const state = loadLocalState();
       setAutoRefreshEnabled(state.settings.autoRefreshEnabled);
       setRefreshMinutes(state.settings.refreshIntervalMinutes);
+      setDailyGameIncludedTypes(
+        normalizeDailyGameItemTypes(state.settings.dailyGameIncludedTypes),
+      );
       setSaved(false);
       setCleared(false);
       setImportMessage("Backup imported successfully.");
@@ -170,10 +197,53 @@ export function SettingsPageClient() {
                   value={refreshMinutes}
                 />
               </div>
+
+              <div>
+                <p className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]">
+                  Daily games item types
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {DAILY_GAME_ITEM_TYPE_VALUES.map((type) => {
+                    const checked = dailyGameIncludedTypes.includes(type);
+
+                    return (
+                      <label
+                        className="flex items-center gap-2 text-sm text-[#d8dee5]"
+                        htmlFor={`daily-game-type-${type}`}
+                        key={type}
+                      >
+                        <input
+                          checked={checked}
+                          className="cursor-pointer"
+                          id={`daily-game-type-${type}`}
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              setDailyGameIncludedTypes((current) =>
+                                normalizeDailyGameItemTypes([...current, type]),
+                              );
+                              return;
+                            }
+
+                            setDailyGameIncludedTypes((current) => {
+                              const next = current.filter((entry) => entry !== type);
+                              return next.length > 0
+                                ? normalizeDailyGameItemTypes(next)
+                                : [...current];
+                            });
+                          }}
+                          type="checkbox"
+                        />
+                        {DAILY_GAME_TYPE_LABELS[type]}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </fieldset>
 
             <p className="mt-3 text-xs text-[var(--text-muted)]" id="refresh-help">
-              Runs every 1-120 minutes while the watchlist page remains open.
+              Runs every 1-120 minutes while the watchlist page remains open. Daily games
+              include your selected item types.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">

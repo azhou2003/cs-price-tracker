@@ -6,9 +6,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GameShareOverlay } from "@/components/game-share-overlay";
 import { fetchDailyOrderByPriceGame } from "@/lib/api-client";
 import {
+  dailyGameItemTypesKey,
+  normalizeDailyGameItemTypes,
+} from "@/lib/daily-game-item-types";
+import {
   DAILY_ORDER_BY_PRICE_STATE_KEY,
   LEGACY_DAILY_GAME_STATE_KEY,
   loadDailyGameStats,
+  loadLocalState,
   recordDailyGameResult,
 } from "@/lib/storage";
 import type {
@@ -21,6 +26,7 @@ import type {
 
 type SavedDailyResult = {
   dayKey: string;
+  includedTypesKey?: string;
   orderedMarketHashNames?: string[];
   result: DailyOrderByPriceResultResponse;
   challenge?: DailyOrderByPriceChallengeResponse;
@@ -28,6 +34,7 @@ type SavedDailyResult = {
 
 type SavedDailyChallengeCache = {
   dayKey: string;
+  includedTypesKey?: string;
   challenge: DailyOrderByPriceChallengeResponse;
 };
 
@@ -50,7 +57,15 @@ function getUtcDayKeyNow() {
   return `${year}-${month}-${day}`;
 }
 
-function loadSavedResult(dayKey: string) {
+function getIncludedTypesKey(challenge?: DailyOrderByPriceChallengeResponse) {
+  if (!challenge) {
+    return null;
+  }
+
+  return dailyGameItemTypesKey(normalizeDailyGameItemTypes(challenge.includedTypes));
+}
+
+function loadSavedResult(dayKey: string, includedTypesKey: string) {
   if (typeof window === "undefined") {
     return null;
   }
@@ -64,7 +79,8 @@ function loadSavedResult(dayKey: string) {
 
   try {
     const parsed = JSON.parse(raw) as SavedDailyResult;
-    if (parsed.dayKey !== dayKey) {
+    const parsedIncludedTypesKey = parsed.includedTypesKey ?? getIncludedTypesKey(parsed.challenge);
+    if (parsed.dayKey !== dayKey || parsedIncludedTypesKey !== includedTypesKey) {
       return null;
     }
 
@@ -76,6 +92,7 @@ function loadSavedResult(dayKey: string) {
 
 function saveResult(
   dayKey: string,
+  includedTypesKey: string,
   orderedMarketHashNames: string[],
   result: DailyOrderByPriceResultResponse,
   challenge: DailyOrderByPriceChallengeResponse,
@@ -88,6 +105,7 @@ function saveResult(
     DAILY_ORDER_BY_PRICE_STATE_KEY,
     JSON.stringify({
       dayKey,
+      includedTypesKey,
       orderedMarketHashNames,
       result,
       challenge,
@@ -95,7 +113,7 @@ function saveResult(
   );
 }
 
-function loadCachedChallenge(dayKey: string) {
+function loadCachedChallenge(dayKey: string, includedTypesKey: string) {
   if (typeof window === "undefined") {
     return null;
   }
@@ -109,7 +127,9 @@ function loadCachedChallenge(dayKey: string) {
 
   try {
     const parsed = JSON.parse(raw) as SavedDailyChallengeCache;
-    if (parsed.dayKey !== dayKey || !parsed.challenge) {
+    const parsedIncludedTypesKey =
+      parsed.includedTypesKey ?? getIncludedTypesKey(parsed.challenge);
+    if (parsed.dayKey !== dayKey || parsedIncludedTypesKey !== includedTypesKey || !parsed.challenge) {
       return null;
     }
 
@@ -128,6 +148,7 @@ function saveCachedChallenge(challenge: DailyOrderByPriceChallengeResponse) {
     DAILY_ORDER_BY_PRICE_CHALLENGE_CACHE_KEY,
     JSON.stringify({
       dayKey: challenge.dayKey,
+      includedTypesKey: dailyGameItemTypesKey(challenge.includedTypes),
       challenge,
     } satisfies SavedDailyChallengeCache),
   );
@@ -337,11 +358,13 @@ export function DailyOrderByPriceGame() {
       setError(null);
 
       const todayKey = getUtcDayKeyNow();
-      const savedToday = loadSavedResult(todayKey);
+      const includedTypes = loadLocalState().settings.dailyGameIncludedTypes;
+      const includedTypesKey = dailyGameItemTypesKey(includedTypes);
+      const savedToday = loadSavedResult(todayKey, includedTypesKey);
       const cachedChallenge =
         savedToday?.challenge && savedToday.challenge.dayKey === todayKey
           ? savedToday.challenge
-          : loadCachedChallenge(todayKey);
+          : loadCachedChallenge(todayKey, includedTypesKey);
 
       if (cachedChallenge && hasChallengeScoringData(cachedChallenge)) {
         const savedResult = isSavedResultCompatible(
@@ -376,14 +399,14 @@ export function DailyOrderByPriceGame() {
       }
 
       try {
-        const nextChallenge = await fetchDailyOrderByPriceGame();
+        const nextChallenge = await fetchDailyOrderByPriceGame(includedTypes);
         if (cancelled) {
           return;
         }
 
         saveCachedChallenge(nextChallenge);
 
-        const saved = loadSavedResult(nextChallenge.dayKey);
+        const saved = loadSavedResult(nextChallenge.dayKey, includedTypesKey);
         const savedResult: DailyOrderByPriceResultResponse | null =
           saved && isSavedResultCompatible(nextChallenge.items, saved.result)
             ? saved.result
@@ -512,7 +535,13 @@ export function DailyOrderByPriceGame() {
       );
       setResult(nextResult);
       setStats(nextStats);
-      saveResult(challenge.dayKey, submittedHashes, nextResult, challenge);
+      saveResult(
+        challenge.dayKey,
+        dailyGameItemTypesKey(challenge.includedTypes),
+        submittedHashes,
+        nextResult,
+        challenge,
+      );
       setIsShareOpen(true);
     } catch (requestError) {
       setError(

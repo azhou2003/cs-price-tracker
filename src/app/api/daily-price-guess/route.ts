@@ -1,3 +1,6 @@
+import type { NextRequest } from "next/server";
+
+import { parseDailyGameItemTypesParam } from "@/lib/daily-game-item-types";
 import {
   getOrCreateDailyPriceGuessChallenge,
   getUtcDayKeyNow,
@@ -6,17 +9,23 @@ import {
 const MAX_ATTEMPTS = 5;
 const TOLERANCE_PERCENT = 0.05;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const dayKey = getUtcDayKeyNow();
+  const includedTypes = parseDailyGameItemTypesParam(
+    request.nextUrl.searchParams.get("types"),
+  );
 
   try {
-    const challenge = await getOrCreateDailyPriceGuessChallenge(dayKey);
+    const challenge = await getOrCreateDailyPriceGuessChallenge(dayKey, {
+      includedTypes,
+    });
 
     return Response.json(
       {
         dayKey: challenge.dayKey,
         generatedAt: challenge.generatedAt,
         expiresAt: challenge.expiresAt,
+        includedTypes: challenge.includedTypes,
         maxAttempts: MAX_ATTEMPTS,
         toleranceUsd: challenge.item.amount * TOLERANCE_PERCENT,
         actualAmount: challenge.item.amount,
