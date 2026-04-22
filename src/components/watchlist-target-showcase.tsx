@@ -329,7 +329,7 @@ export function WatchlistTargetShowcase({
       >
         {loopItems.map((entry, index) => (
           <li
-            className={`panel-inset min-w-[260px] px-3 py-2 ${getBeltItemClass(entry.status)} ${enteringHashes.has(entry.item.marketHashName) ? "watchlist-belt-item-enter" : ""}`}
+            className={`panel-inset min-w-[220px] px-2.5 py-2 sm:min-w-[260px] sm:px-3 ${getBeltItemClass(entry.status)} ${enteringHashes.has(entry.item.marketHashName) ? "watchlist-belt-item-enter" : ""}`}
             key={
               shouldLoop && index >= orderedBeltItems.length
                 ? `${entry.item.marketHashName}-clone`

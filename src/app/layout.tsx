@@ -41,21 +41,21 @@ export default function RootLayout({
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[#e4e7eb]">Community Market Watch</p>
               </div>
-              <nav className="flex flex-wrap gap-2">
+              <nav className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                 <Link
-                  className="btn btn-muted"
+                  className="btn btn-muted text-center"
                   href="/"
                 >
                   Watchlist
                 </Link>
                 <Link
-                  className="btn btn-muted"
+                  className="btn btn-muted text-center"
                   href="/games"
                 >
                   Daily Games
                 </Link>
                 <Link
-                  className="btn btn-muted"
+                  className="btn btn-muted text-center"
                   href="/settings"
                 >
                   Settings

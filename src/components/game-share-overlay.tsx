@@ -63,8 +63,8 @@ export function GameShareOverlay({
   };
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center p-3 pointer-events-none sm:p-4">
-      <article className="panel pointer-events-auto w-[min(28rem,100%)] p-3 sm:p-4">
+    <div className="pointer-events-none absolute inset-0 z-30 flex items-end justify-center p-2 sm:items-center sm:p-4">
+      <article className="panel pointer-events-auto max-h-[85vh] w-full max-w-[28rem] overflow-y-auto p-3 sm:p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="label-caps">Share Result</p>

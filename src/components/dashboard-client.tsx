@@ -728,7 +728,7 @@ export function DashboardClient() {
           />
 
           {query.trim().length >= 3 ? (
-            <div className="panel-inset absolute left-0 right-0 z-20 mt-2 overflow-hidden shadow-[0_18px_34px_rgba(0,0,0,0.42)]">
+            <div className="panel-inset absolute left-0 right-0 z-20 mt-2 max-h-[65vh] overflow-y-auto shadow-[0_18px_34px_rgba(0,0,0,0.42)] sm:max-h-[26rem]">
               {isSearching ? <p className="px-4 py-3 text-sm text-[var(--text-dim)]">Searching...</p> : null}
               {searchError ? <p className="px-4 py-3 text-sm text-rose-300">{searchError}</p> : null}
 
@@ -824,7 +824,8 @@ export function DashboardClient() {
                 placeholder="Search watchlist items"
                 value={watchlistQuery}
               />
-              <div className="flex flex-wrap gap-2">
+              <div className="-mx-1 overflow-x-auto pb-1 md:mx-0 md:overflow-visible md:pb-0">
+                <div className="flex min-w-max gap-2 px-1 md:min-w-0 md:flex-wrap md:px-0">
                 {([
                   { key: "all", label: "All" },
                   { key: "triggered", label: "Triggered" },
@@ -853,6 +854,7 @@ export function DashboardClient() {
                     </button>
                   );
                 })}
+                </div>
               </div>
             </div>
 
@@ -860,7 +862,157 @@ export function DashboardClient() {
               <p className="mt-4 text-sm text-[var(--text-muted)]">No watchlist items match this filter.</p>
             ) : null}
 
-            <div className="panel-inset mt-4 overflow-x-auto">
+            <div className="mt-4 space-y-2.5 md:hidden">
+              {filteredWatchlist.map((item) => {
+                const latest = state.historyByItem[item.marketHashName]?.at(-1) ?? null;
+                const status = getAlertStatus(item, latest?.amount ?? null);
+                const statusBadge = getStatusBadge(status);
+
+                return (
+                  <article
+                    className="panel-inset cursor-pointer px-3 py-2.5 active:bg-[#202934]"
+                    key={`mobile-${item.marketHashName}`}
+                    onClick={() => {
+                      openItemModal(item);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {item.iconUrl ? (
+                          <Image
+                            alt={item.displayName}
+                            className="rounded-[2px] border border-[#455260] bg-[#11161c]"
+                            height={40}
+                            src={item.iconUrl}
+                            width={40}
+                          />
+                        ) : (
+                          <span className="h-10 w-10 rounded-[2px] border border-[#455260] bg-[#11161c]" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-snug text-[#dce1e6] [overflow-wrap:anywhere]">
+                            {item.displayName}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-[#cfd7df]">
+                            {latest ? latest.lowestPriceText ?? formatUsd(latest.amount) : "No price yet"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                            Added {formatTimestamp(item.addedAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`${statusBadge.className} shrink-0`}>{statusBadge.label}</span>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {item.lowAlert != null ? (
+                        <span className="chip chip-buy">Lower {formatUsd(item.lowAlert)}</span>
+                      ) : null}
+                      {item.highAlert != null ? (
+                        <span className="chip chip-sell">Upper {formatUsd(item.highAlert)}</span>
+                      ) : null}
+                      {item.lowAlert == null && item.highAlert == null ? (
+                        <span className="chip chip-neutral">No targets set</span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-end gap-2">
+                      <button
+                        aria-label="Refresh item"
+                        className="btn btn-icon btn-primary"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void refreshWatchlistItem(item.marketHashName);
+                        }}
+                        title="Refresh item"
+                        type="button"
+                      >
+                        {refreshingItemHash === item.marketHashName ? (
+                          <span className="h-3 w-3 animate-spin rounded-full border border-[#dce7f1] border-t-transparent" />
+                        ) : (
+                          <svg
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M20 12a8 8 0 1 1-2.34-5.66"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M20 4v6h-6"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        aria-label="Delete item"
+                        className="btn btn-icon btn-danger"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeWatchlistItem(item.marketHashName);
+                        }}
+                        title="Delete item"
+                        type="button"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="M3 6h18"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M8 6V4h8v2"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M6 6l1 14h10l1-14"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M10 10v6"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M14 10v6"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="panel-inset mt-4 hidden overflow-x-auto md:block">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -1037,8 +1189,8 @@ export function DashboardClient() {
       </article>
 
       {resolvedActiveItem ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#070b10]/82 p-4">
-          <article className="panel w-full max-w-4xl p-4 sm:p-5">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#070b10]/82 p-2 sm:items-center sm:p-4">
+          <article className="panel my-2 max-h-[calc(100dvh-1rem)] w-full max-w-4xl overflow-y-auto p-3 sm:my-0 sm:max-h-[calc(100dvh-2rem)] sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 {resolvedActiveItem.iconUrl ? (
