@@ -862,7 +862,6 @@ export function DailyPriceGame() {
               shareText={shareText}
               shareUrl={shareUrl}
               subtitle="Challenge your friends with today's lineup."
-              title="Daily Order By Price"
             />
           </>
         ) : null}

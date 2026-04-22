@@ -491,7 +491,6 @@ export function DailyPriceGuessGame() {
         shareText={shareText}
         shareUrl={shareUrl}
         subtitle="Share your guesses and challenge friends."
-        title="Daily Price Guess"
       />
     </article>
   );

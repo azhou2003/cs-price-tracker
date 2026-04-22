@@ -78,9 +78,15 @@ export function GameShareOverlay({
 
         <div className="panel-inset mt-4 p-3">
           <p className="text-xs text-[var(--text-muted)]">Preview</p>
-          <p className="mt-1 text-sm leading-relaxed text-[#d3dae1]">
-            {buildShareMessage(shareText, shareUrl)}
-          </p>
+          <p className="mt-1 text-sm leading-relaxed text-[#d3dae1]">{shareText}</p>
+          <a
+            className="mt-1 inline-block text-sm font-medium text-[#9ec6ea] underline underline-offset-2 hover:text-[#b7d8f4]"
+            href={shareUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {shareUrl}
+          </a>
         </div>
 
         <div className="mt-3 flex items-center justify-end gap-2">
