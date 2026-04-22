@@ -1,29 +1,41 @@
 # CS Price Tracker
 
-Local-first web app to track Counter-Strike item prices. User watchlists, history, and
-preferences are stored in the browser only.
+CS Price Tracker is a local-first Counter-Strike market tracker built with Next.js.
+Watchlist data, price history, game progress, and preferences are stored in the browser only.
 
-## Stack
+## Tech Stack
 
-- Next.js (App Router) + TypeScript
+- Next.js 16 (App Router) + React 19 + TypeScript
 - Tailwind CSS v4
-- Route Handlers as a stateless proxy layer for market data
+- Next.js Route Handlers for Steam proxy endpoints
 
-## Current Features
+## App Routes
 
-- App pages:
-  - `/` dashboard with local watchlist overview and refresh-all action
-  - `/search` debounced Steam item search
-  - `/settings` local preferences (refresh interval + notifications toggle)
-- API routes:
-  - `/api/health`
-  - `/api/search`
-  - `/api/price`
-- Local state modules in `src/lib`:
-  - `types.ts`
-  - `storage.ts`
-  - `api-client.ts`
-  - `steam.ts`
+- `/` - Dashboard for watchlist management, item search, and price refresh
+- `/games` - Daily game modes:
+  - Order 5 items from lowest to highest price
+  - Guess the item price within tolerance
+- `/settings` - Local settings (refresh interval, notifications toggle, and clear local data)
+- `/search` - Redirects to `/`
+
+## API Routes
+
+- `/api/health` - Simple health check
+- `/api/search` - Steam market search (30s in-memory cache)
+- `/api/price` - Current price for a market item (20s in-memory cache)
+- `/api/item` - Item metadata by market hash name (5m in-memory cache)
+- `/api/history` - Steam price history proxy (requires Steam auth headers)
+- `/api/daily-game` and `/api/daily-game/guess` - Daily order-by-price challenge
+- `/api/daily-price-guess` and `/api/daily-price-guess/guess` - Daily price guess challenge
+
+## Local Data Model
+
+- Storage key: `cs-price-tracker:v1`
+- Additional game keys:
+  - `cs-price-tracker:daily-game:v1`
+  - `cs-price-tracker:daily-price-guess:v1`
+  - `cs-price-tracker:daily-game-stats:v1`
+- Currency is currently fixed to `USD`
 
 ## Run Locally
 
@@ -32,15 +44,20 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:3000`.
+Open `http://localhost:3000`.
+
+## Build and Lint
+
+```bash
+npm run lint
+npm run build
+npm run start
+```
 
 ## Notes
 
-- User data remains browser-local (`localStorage`) with no server persistence.
-- Proxy routes add request validation, timeout handling, and short in-memory cache.
-
-## Next Steps
-
-1. Add chart visualization for local price history.
-2. Add threshold alerts (`lowAlert`, `highAlert`) and browser notification triggers.
-3. Add optional batch price endpoint for faster watchlist refreshes.
+- This app does not persist user state on a backend.
+- `/api/history` expects Steam auth values via request headers:
+  - `x-steam-login-secure`
+  - `x-steam-sessionid`
+  - optional: `x-steam-country`, `x-steam-extra-cookies`
