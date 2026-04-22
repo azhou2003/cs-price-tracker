@@ -1,4 +1,4 @@
-import { SettingsPageClient } from "@/components/settings-page-client";
+import { SettingsPageClient } from "@/app/settings/_components/settings-page-client";
 
 export const metadata = {
   title: "Settings",

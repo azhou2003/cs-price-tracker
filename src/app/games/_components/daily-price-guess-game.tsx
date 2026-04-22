@@ -239,7 +239,7 @@ export function DailyPriceGuessGame() {
           setError(
             requestError instanceof Error
               ? requestError.message
-              : "Failed to load daily price game",
+              : "Failed to load daily price guess game",
           );
         }
       } finally {
@@ -377,7 +377,7 @@ export function DailyPriceGuessGame() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label-caps">
-            Daily Game
+            Daily Price Guess
           </p>
           <h2 className="mt-1 text-xl font-semibold text-[#e3e7ed]">Price Guess</h2>
         </div>

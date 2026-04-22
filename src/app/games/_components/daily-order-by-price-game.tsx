@@ -4,35 +4,37 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { GameShareOverlay } from "@/components/game-share-overlay";
-import { fetchDailyGame } from "@/lib/api-client";
+import { fetchDailyOrderByPriceGame } from "@/lib/api-client";
 import {
-  DAILY_GAME_STATE_KEY,
+  DAILY_ORDER_BY_PRICE_STATE_KEY,
+  LEGACY_DAILY_GAME_STATE_KEY,
   loadDailyGameStats,
   recordDailyGameResult,
 } from "@/lib/storage";
 import type {
-  DailyGameChallengeResponse,
-  DailyGameGuessResponse,
+  DailyOrderByPriceChallengeResponse,
+  DailyOrderByPriceResultResponse,
   DailyGameItem,
-  DailyGameResultItem,
+  DailyOrderByPriceResultItem,
   DailyGameStatsState,
 } from "@/lib/types";
 
 type SavedDailyResult = {
   dayKey: string;
   orderedMarketHashNames?: string[];
-  result: DailyGameGuessResponse;
-  challenge?: DailyGameChallengeResponse;
+  result: DailyOrderByPriceResultResponse;
+  challenge?: DailyOrderByPriceChallengeResponse;
 };
 
 type SavedDailyChallengeCache = {
   dayKey: string;
-  challenge: DailyGameChallengeResponse;
+  challenge: DailyOrderByPriceChallengeResponse;
 };
 
 const MOBILE_LONG_PRESS_MS = 90;
 const TOUCH_MOVE_CANCEL_PX = 5;
-const DAILY_GAME_CHALLENGE_CACHE_KEY = "cs-price-tracker:daily-game-challenge:v1";
+const DAILY_ORDER_BY_PRICE_CHALLENGE_CACHE_KEY = "cs-price-tracker:daily-order-by-price-challenge:v1";
+const LEGACY_DAILY_GAME_CHALLENGE_CACHE_KEY = "cs-price-tracker:daily-game-challenge:v1";
 const SHARE_BASE_URL = "https://www.cspricetracker.com";
 const ORDER_BY_PRICE_ENDPOINT = "/games#order-by-price";
 const EMPTY_STATS: DailyGameStatsState = {
@@ -53,7 +55,9 @@ function loadSavedResult(dayKey: string) {
     return null;
   }
 
-  const raw = window.localStorage.getItem(DAILY_GAME_STATE_KEY);
+  const raw =
+    window.localStorage.getItem(DAILY_ORDER_BY_PRICE_STATE_KEY) ??
+    window.localStorage.getItem(LEGACY_DAILY_GAME_STATE_KEY);
   if (!raw) {
     return null;
   }
@@ -73,15 +77,15 @@ function loadSavedResult(dayKey: string) {
 function saveResult(
   dayKey: string,
   orderedMarketHashNames: string[],
-  result: DailyGameGuessResponse,
-  challenge: DailyGameChallengeResponse,
+  result: DailyOrderByPriceResultResponse,
+  challenge: DailyOrderByPriceChallengeResponse,
 ) {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.setItem(
-    DAILY_GAME_STATE_KEY,
+    DAILY_ORDER_BY_PRICE_STATE_KEY,
     JSON.stringify({
       dayKey,
       orderedMarketHashNames,
@@ -96,7 +100,9 @@ function loadCachedChallenge(dayKey: string) {
     return null;
   }
 
-  const raw = window.localStorage.getItem(DAILY_GAME_CHALLENGE_CACHE_KEY);
+  const raw =
+    window.localStorage.getItem(DAILY_ORDER_BY_PRICE_CHALLENGE_CACHE_KEY) ??
+    window.localStorage.getItem(LEGACY_DAILY_GAME_CHALLENGE_CACHE_KEY);
   if (!raw) {
     return null;
   }
@@ -113,13 +119,13 @@ function loadCachedChallenge(dayKey: string) {
   }
 }
 
-function saveCachedChallenge(challenge: DailyGameChallengeResponse) {
+function saveCachedChallenge(challenge: DailyOrderByPriceChallengeResponse) {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.setItem(
-    DAILY_GAME_CHALLENGE_CACHE_KEY,
+    DAILY_ORDER_BY_PRICE_CHALLENGE_CACHE_KEY,
     JSON.stringify({
       dayKey: challenge.dayKey,
       challenge,
@@ -147,7 +153,7 @@ function formatUsd(value: number) {
 
 function isSavedResultCompatible(
   items: DailyGameItem[],
-  result: DailyGameGuessResponse | undefined,
+  result: DailyOrderByPriceResultResponse | undefined,
 ) {
   if (!result) {
     return false;
@@ -156,7 +162,7 @@ function isSavedResultCompatible(
   return hasSameHashes(items, result.correctOrder);
 }
 
-function hasSameHashes(items: DailyGameItem[], rankedItems: DailyGameResultItem[]) {
+function hasSameHashes(items: DailyGameItem[], rankedItems: DailyOrderByPriceResultItem[]) {
   if (items.length !== rankedItems.length) {
     return false;
   }
@@ -181,11 +187,11 @@ function hasScoringData(item: DailyGameItem) {
   return typeof item.amount === "number" && Number.isFinite(item.amount);
 }
 
-function hasChallengeScoringData(challenge: DailyGameChallengeResponse) {
+function hasChallengeScoringData(challenge: DailyOrderByPriceChallengeResponse) {
   return challenge.items.every(hasScoringData);
 }
 
-function getCorrectOrder(items: DailyGameItem[]) {
+function getOrderByPriceCorrectOrder(items: DailyGameItem[]) {
   return [...items].sort((left, right) => {
     const leftAmount = left.amount ?? Number.POSITIVE_INFINITY;
     const rightAmount = right.amount ?? Number.POSITIVE_INFINITY;
@@ -197,10 +203,10 @@ function getCorrectOrder(items: DailyGameItem[]) {
   });
 }
 
-export function DailyPriceGame() {
-  const [challenge, setChallenge] = useState<DailyGameChallengeResponse | null>(null);
+export function DailyOrderByPriceGame() {
+  const [challenge, setChallenge] = useState<DailyOrderByPriceChallengeResponse | null>(null);
   const [orderedItems, setOrderedItems] = useState<DailyGameItem[]>([]);
-  const [result, setResult] = useState<DailyGameGuessResponse | null>(null);
+  const [result, setResult] = useState<DailyOrderByPriceResultResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -370,7 +376,7 @@ export function DailyPriceGame() {
       }
 
       try {
-        const nextChallenge = await fetchDailyGame();
+        const nextChallenge = await fetchDailyOrderByPriceGame();
         if (cancelled) {
           return;
         }
@@ -378,7 +384,7 @@ export function DailyPriceGame() {
         saveCachedChallenge(nextChallenge);
 
         const saved = loadSavedResult(nextChallenge.dayKey);
-        const savedResult: DailyGameGuessResponse | null =
+        const savedResult: DailyOrderByPriceResultResponse | null =
           saved && isSavedResultCompatible(nextChallenge.items, saved.result)
             ? saved.result
             : null;
@@ -402,7 +408,7 @@ export function DailyPriceGame() {
           setError(
             requestError instanceof Error
               ? requestError.message
-              : "Failed to load daily game",
+              : "Failed to load daily order by price game",
           );
         }
       } finally {
@@ -471,7 +477,7 @@ export function DailyPriceGame() {
     }
 
     if (!hasChallengeScoringData(challenge)) {
-      setError("Daily game data is stale. Please refresh and try again.");
+      setError("Daily order by price data is stale. Please refresh and try again.");
       return;
     }
 
@@ -480,7 +486,7 @@ export function DailyPriceGame() {
 
     try {
       const submittedHashes = orderedItems.map((item) => item.marketHashName);
-      const correctOrder = getCorrectOrder(challenge.items);
+      const correctOrder = getOrderByPriceCorrectOrder(challenge.items);
       const exactMatches = submittedHashes.reduce((count, marketHashName, index) => {
         return correctOrder[index]?.marketHashName === marketHashName ? count + 1 : count;
       }, 0);
@@ -497,7 +503,7 @@ export function DailyPriceGame() {
           amount: item.amount ?? 0,
           priceText: item.lowestPriceText,
         })),
-      } satisfies DailyGameGuessResponse;
+      } satisfies DailyOrderByPriceResultResponse;
 
       const nextStats = recordDailyGameResult(
         "order-by-price",
@@ -512,7 +518,7 @@ export function DailyPriceGame() {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Failed to submit daily game",
+          : "Failed to submit daily order by price game",
       );
     } finally {
       setIsSubmitting(false);
@@ -785,7 +791,7 @@ export function DailyPriceGame() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="label-caps">
-              Daily Game
+              Daily Order By Price
             </p>
             <h2 className="mt-1 text-xl font-semibold text-[#e3e7ec]">Order By Price</h2>
           </div>
@@ -798,7 +804,7 @@ export function DailyPriceGame() {
           Record {stats.orderByPrice.wins}/{stats.orderByPrice.played} wins • Streak {stats.orderByPrice.currentStreak}
         </p>
 
-        {isLoading ? <p className="mt-4 text-sm text-[var(--text-dim)]">Loading daily game...</p> : null}
+        {isLoading ? <p className="mt-4 text-sm text-[var(--text-dim)]">Loading daily order by price...</p> : null}
         {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
 
         {!isLoading && challenge ? (

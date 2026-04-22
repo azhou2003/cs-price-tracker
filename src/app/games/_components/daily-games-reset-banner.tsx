@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { DailyResetCountdown } from "@/components/daily-reset-countdown";
-import { fetchDailyGame, fetchDailyPriceGuessGame } from "@/lib/api-client";
+import { DailyResetCountdown } from "@/app/games/_components/daily-reset-countdown";
+import { fetchDailyOrderByPriceGame, fetchDailyPriceGuessGame } from "@/lib/api-client";
 
 export function DailyGamesResetBanner() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -13,13 +13,13 @@ export function DailyGamesResetBanner() {
 
     async function loadExpiresAt() {
       try {
-        const dailyGame = await fetchDailyGame();
+        const dailyOrderByPriceGame = await fetchDailyOrderByPriceGame();
         if (!cancelled) {
-          setExpiresAt(dailyGame.expiresAt);
+          setExpiresAt(dailyOrderByPriceGame.expiresAt);
         }
         return;
       } catch {
-        // Try the second daily game endpoint if the first one fails.
+        // Try the second daily games endpoint if the first one fails.
       }
 
       try {

@@ -8,7 +8,7 @@ type DailyGamePriceEntry = {
   lowestPriceText?: string;
 };
 
-export type DailyGameChallenge = {
+export type DailyOrderByPriceChallenge = {
   dayKey: string;
   generatedAt: string;
   expiresAt: string;
@@ -48,7 +48,7 @@ const QUERY_POOL = [
   "XM1014",
 ];
 
-const DAILY_CACHE = new Map<string, DailyGameChallenge>();
+const DAILY_ORDER_BY_PRICE_CACHE = new Map<string, DailyOrderByPriceChallenge>();
 const DAILY_PRICE_GUESS_CACHE = new Map<string, DailyPriceGuessChallenge>();
 
 function getUtcDayKey(value = new Date()) {
@@ -159,12 +159,12 @@ async function getPricedCandidates(dayKey: string, targetCount: number) {
   return picked;
 }
 
-async function buildDailyChallenge(dayKey: string): Promise<DailyGameChallenge> {
+async function buildDailyOrderByPriceChallenge(dayKey: string): Promise<DailyOrderByPriceChallenge> {
   const { start, end } = dayBounds(dayKey);
   const picked = await getPricedCandidates(dayKey, DAILY_ITEM_COUNT);
 
   if (picked.length < DAILY_ITEM_COUNT) {
-    throw new Error("Unable to build daily game with five priced items");
+    throw new Error("Unable to build daily order by price game with five priced items");
   }
 
   const finalItems = shuffle(picked, `${dayKey}:final-order`);
@@ -195,19 +195,19 @@ async function buildDailyPriceGuessChallenge(
   };
 }
 
-export async function getOrCreateDailyChallenge(dayKey = getUtcDayKey()) {
-  const cached = DAILY_CACHE.get(dayKey);
+export async function getOrCreateDailyOrderByPriceChallenge(dayKey = getUtcDayKey()) {
+  const cached = DAILY_ORDER_BY_PRICE_CACHE.get(dayKey);
   if (cached) {
     return cached;
   }
 
-  const challenge = await buildDailyChallenge(dayKey);
-  DAILY_CACHE.clear();
-  DAILY_CACHE.set(dayKey, challenge);
+  const challenge = await buildDailyOrderByPriceChallenge(dayKey);
+  DAILY_ORDER_BY_PRICE_CACHE.clear();
+  DAILY_ORDER_BY_PRICE_CACHE.set(dayKey, challenge);
   return challenge;
 }
 
-export function getCorrectOrder(challenge: DailyGameChallenge) {
+export function getDailyOrderByPriceCorrectOrder(challenge: DailyOrderByPriceChallenge) {
   return [...challenge.items].sort((left, right) => {
     if (left.amount === right.amount) {
       return left.marketHashName.localeCompare(right.marketHashName);

@@ -1,6 +1,5 @@
 import type {
-  DailyGameChallengeResponse,
-  DailyGameGuessResponse,
+  DailyOrderByPriceChallengeResponse,
   DailyPriceGuessChallengeResponse,
   MarketItem,
   PriceSnapshot,
@@ -16,11 +15,6 @@ type PriceResponse = {
 
 type ItemResponse = {
   item: MarketItem | null;
-};
-
-type DailyGameGuessPayload = {
-  dayKey: string;
-  orderedMarketHashNames: string[];
 };
 
 type ErrorResponse = {
@@ -81,32 +75,14 @@ export async function fetchItemMeta(
   return data.item;
 }
 
-export async function fetchDailyGame(): Promise<DailyGameChallengeResponse> {
-  const response = await fetch("/api/daily-game");
+export async function fetchDailyOrderByPriceGame(): Promise<DailyOrderByPriceChallengeResponse> {
+  const response = await fetch("/api/daily-order-by-price");
 
   if (!response.ok) {
-    throw await toError(response, "Failed to fetch daily game");
+    throw await toError(response, "Failed to fetch daily order by price game");
   }
 
-  return (await response.json()) as DailyGameChallengeResponse;
-}
-
-export async function submitDailyGameGuess(
-  payload: DailyGameGuessPayload,
-): Promise<DailyGameGuessResponse> {
-  const response = await fetch("/api/daily-game/guess", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw await toError(response, "Failed to submit daily game guess");
-  }
-
-  return (await response.json()) as DailyGameGuessResponse;
+  return (await response.json()) as DailyOrderByPriceChallengeResponse;
 }
 
 export async function fetchDailyPriceGuessGame(): Promise<DailyPriceGuessChallengeResponse> {

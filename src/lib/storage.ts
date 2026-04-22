@@ -9,9 +9,11 @@ import type {
 const STORAGE_KEY = "cs-price-tracker:v1";
 const APP_STORAGE_KEY_PREFIX = "cs-price-tracker:";
 const GAME_STORAGE_KEY_PREFIX = "cs-price-tracker:daily-";
-const DAILY_GAME_STATE_KEY = "cs-price-tracker:daily-game:v1";
+const DAILY_ORDER_BY_PRICE_STATE_KEY = "cs-price-tracker:daily-order-by-price:v1";
+const LEGACY_DAILY_GAME_STATE_KEY = "cs-price-tracker:daily-game:v1";
 const DAILY_PRICE_GUESS_STATE_KEY = "cs-price-tracker:daily-price-guess:v1";
-const DAILY_GAME_STATS_KEY = "cs-price-tracker:daily-game-stats:v1";
+const DAILY_GAMES_STATS_KEY = "cs-price-tracker:daily-games-stats:v1";
+const LEGACY_DAILY_GAME_STATS_KEY = "cs-price-tracker:daily-game-stats:v1";
 const BACKUP_VERSION = 1;
 
 const DEFAULT_STATE: LocalState = {
@@ -261,7 +263,9 @@ export function loadDailyGameStats(): DailyGameStatsState {
     return DEFAULT_DAILY_GAME_STATS;
   }
 
-  const raw = window.localStorage.getItem(DAILY_GAME_STATS_KEY);
+  const raw =
+    window.localStorage.getItem(DAILY_GAMES_STATS_KEY) ??
+    window.localStorage.getItem(LEGACY_DAILY_GAME_STATS_KEY);
   if (!raw) {
     return DEFAULT_DAILY_GAME_STATS;
   }
@@ -288,7 +292,7 @@ export function saveDailyGameStats(stats: DailyGameStatsState) {
     return;
   }
 
-  window.localStorage.setItem(DAILY_GAME_STATS_KEY, JSON.stringify(stats));
+  window.localStorage.setItem(DAILY_GAMES_STATS_KEY, JSON.stringify(stats));
 }
 
 export function recordDailyGameResult(
@@ -505,9 +509,10 @@ export function importBackupPayload(payload: unknown) {
 }
 
 export {
-  DAILY_GAME_STATE_KEY,
-  DAILY_GAME_STATS_KEY,
+  DAILY_GAMES_STATS_KEY,
+  DAILY_ORDER_BY_PRICE_STATE_KEY,
   DAILY_PRICE_GUESS_STATE_KEY,
   DEFAULT_STATE,
+  LEGACY_DAILY_GAME_STATE_KEY,
   STORAGE_KEY,
 };

@@ -13,7 +13,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## App shape (single Next.js app)
 
-- Routes live in `src/app`; UI is mostly client components in `src/components`.
+- Routes live in `src/app`; route-specific UI is colocated in each route's `_components` folder, with shared UI in `src/components`.
 - `src/app/page.tsx` is the real dashboard entrypoint (`DashboardClient`); `src/app/search/page.tsx` just redirects to `/`.
 - Steam integration logic is centralized in `src/lib/steam.ts`; browser-facing fetch wrappers are in `src/lib/api-client.ts`.
 
@@ -26,8 +26,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## API route quirks to preserve
 
 - Proxy routes are in `src/app/api/*`; they use in-memory `Map` caches with short TTLs (search 30s, price 20s, item 5m).
-- `/api/history` is authenticated via request headers, not env vars: `x-steam-login-secure`, `x-steam-sessionid`, optional `x-steam-country`, `x-steam-extra-cookies`.
-- `/api/history` returns detailed upstream failure hints; avoid removing that diagnostics payload unless asked.
 
 ## Styling guide (required)
 

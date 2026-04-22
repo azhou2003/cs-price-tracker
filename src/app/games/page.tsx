@@ -1,7 +1,7 @@
-import { DailyGamesFacts } from "@/components/daily-games-facts";
-import { DailyGamesResetBanner } from "@/components/daily-games-reset-banner";
-import { DailyPriceGame } from "@/components/daily-price-game";
-import { DailyPriceGuessGame } from "@/components/daily-price-guess-game";
+import { DailyGamesFacts } from "@/app/games/_components/daily-games-facts";
+import { DailyGamesResetBanner } from "@/app/games/_components/daily-games-reset-banner";
+import { DailyOrderByPriceGame } from "@/app/games/_components/daily-order-by-price-game";
+import { DailyPriceGuessGame } from "@/app/games/_components/daily-price-guess-game";
 
 export const metadata = {
   title: "Daily Games",
@@ -13,7 +13,7 @@ export default function GamesPage() {
       <DailyGamesResetBanner />
       <DailyGamesFacts />
       <div className="grid gap-5 lg:grid-cols-2">
-        <DailyPriceGame />
+        <DailyOrderByPriceGame />
         <DailyPriceGuessGame />
       </div>
     </section>

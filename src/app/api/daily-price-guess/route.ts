@@ -1,7 +1,7 @@
 import {
   getOrCreateDailyPriceGuessChallenge,
   getUtcDayKeyNow,
-} from "@/lib/daily-game";
+} from "@/lib/daily-games";
 
 const MAX_ATTEMPTS = 5;
 const TOLERANCE_PERCENT = 0.05;
@@ -32,7 +32,7 @@ export async function GET() {
   } catch {
     return Response.json(
       {
-        error: "Unable to generate today’s price game right now. Please try again.",
+        error: "Unable to generate today's daily price guess game right now. Please try again.",
       },
       { status: 502 },
     );

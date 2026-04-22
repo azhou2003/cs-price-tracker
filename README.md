@@ -20,21 +20,21 @@ Watchlist data, price history, game progress, and preferences are stored in the 
 
 ## API Routes
 
-- `/api/health` - Simple health check
 - `/api/search` - Steam market search (30s in-memory cache)
 - `/api/price` - Current price for a market item (20s in-memory cache)
 - `/api/item` - Item metadata by market hash name (5m in-memory cache)
-- `/api/history` - Steam price history proxy (requires Steam auth headers)
-- `/api/daily-game` and `/api/daily-game/guess` - Daily order-by-price challenge
-- `/api/daily-price-guess` and `/api/daily-price-guess/guess` - Daily price guess challenge
+- `/api/daily-order-by-price` - Daily order-by-price challenge
+- `/api/daily-price-guess` - Daily price guess challenge
 
 ## Local Data Model
 
 - Storage key: `cs-price-tracker:v1`
 - Additional game keys:
-  - `cs-price-tracker:daily-game:v1`
+  - `cs-price-tracker:daily-order-by-price:v1`
   - `cs-price-tracker:daily-price-guess:v1`
-  - `cs-price-tracker:daily-game-stats:v1`
+  - `cs-price-tracker:daily-games-stats:v1`
+  - `cs-price-tracker:daily-order-by-price-challenge:v1`
+  - `cs-price-tracker:daily-price-guess-challenge:v1`
 - Currency is currently fixed to `USD`
 
 ## Run Locally
@@ -87,7 +87,3 @@ Prefer these shared classes before introducing one-off Tailwind color stacks.
 ## Notes
 
 - This app does not persist user state on a backend.
-- `/api/history` expects Steam auth values via request headers:
-  - `x-steam-login-secure`
-  - `x-steam-sessionid`
-  - optional: `x-steam-country`, `x-steam-extra-cookies`

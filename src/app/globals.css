@@ -257,6 +257,18 @@ input:disabled {
   }
 }
 
+@keyframes watchlist-belt-item-enter {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .watchlist-belt-wrap {
   position: relative;
 }
@@ -269,8 +281,16 @@ input:disabled {
   animation-play-state: paused;
 }
 
+.watchlist-belt-item-enter {
+  animation: watchlist-belt-item-enter 240ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .watchlist-belt-track {
+    animation: none;
+  }
+
+  .watchlist-belt-item-enter {
     animation: none;
   }
 }

@@ -1,13 +1,13 @@
 import {
-  getOrCreateDailyChallenge,
+  getOrCreateDailyOrderByPriceChallenge,
   getUtcDayKeyNow,
-} from "@/lib/daily-game";
+} from "@/lib/daily-games";
 
 export async function GET() {
   const dayKey = getUtcDayKeyNow();
 
   try {
-    const challenge = await getOrCreateDailyChallenge(dayKey);
+    const challenge = await getOrCreateDailyOrderByPriceChallenge(dayKey);
 
     return Response.json(
       {
@@ -28,7 +28,7 @@ export async function GET() {
   } catch {
     return Response.json(
       {
-        error: "Unable to generate today’s game right now. Please try again.",
+        error: "Unable to generate today's daily order by price game right now. Please try again.",
       },
       { status: 502 },
     );

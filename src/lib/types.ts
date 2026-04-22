@@ -71,7 +71,7 @@ export type DailyGameItem = {
   lowestPriceText?: string;
 };
 
-export type DailyGameChallengeResponse = {
+export type DailyOrderByPriceChallengeResponse = {
   dayKey: string;
   generatedAt: string;
   expiresAt: string;
@@ -79,18 +79,18 @@ export type DailyGameChallengeResponse = {
   items: DailyGameItem[];
 };
 
-export type DailyGameResultItem = DailyGameItem & {
+export type DailyOrderByPriceResultItem = DailyGameItem & {
   rank: number;
   amount: number;
   priceText?: string;
 };
 
-export type DailyGameGuessResponse = {
+export type DailyOrderByPriceResultResponse = {
   dayKey: string;
   submittedOrder: string[];
   exactMatches: number;
   allCorrect: boolean;
-  correctOrder: DailyGameResultItem[];
+  correctOrder: DailyOrderByPriceResultItem[];
 };
 
 export type DailyPriceGuessChallengeResponse = {

@@ -75,7 +75,7 @@ export function DailyGamesFacts() {
     <section className="panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="label-caps">Daily Game Summary</p>
+          <p className="label-caps">Daily Games Summary</p>
         </div>
         <span className="chip chip-neutral">Local profile</span>
       </div>

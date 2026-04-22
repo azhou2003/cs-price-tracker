@@ -236,7 +236,7 @@ export function SettingsPageClient() {
       <article className="panel-inset p-3 sm:p-4">
         <p className="label-caps">Local Storage Notice</p>
         <p className="mt-1 text-sm text-[#d8dee5]">
-          Watchlist, history, daily game progress, and settings are stored only on this
+          Watchlist, history, daily games progress, and settings are stored only on this
           browser profile.
         </p>
         <p className="mt-1 text-xs text-[var(--text-dim)]">

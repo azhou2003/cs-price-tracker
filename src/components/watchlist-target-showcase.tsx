@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 import type { PriceSnapshot, WatchlistEntry } from "@/lib/types";
 
@@ -185,6 +185,9 @@ export function WatchlistTargetShowcase({
   watchlist,
   historyByItem,
 }: WatchlistTargetShowcaseProps) {
+  const orderedHashesRef = useRef<string[]>([]);
+  const previousVisibleHashesRef = useRef<Set<string>>(new Set());
+  const hasInitializedRef = useRef(false);
   const uniqueWatchlist = useMemo(() => uniqueByMarketHash(watchlist), [watchlist]);
 
   const triggeredItems = useMemo(() => {
@@ -277,12 +280,47 @@ export function WatchlistTargetShowcase({
 
   const beltItems = triggeredItems.length > 0 ? triggeredItems : fallbackItems;
 
-  if (beltItems.length === 0) {
+  const { orderedBeltItems, enteringHashes } = useMemo(() => {
+    const itemByHash = new Map(
+      beltItems.map((entry) => [entry.item.marketHashName, entry] as const),
+    );
+    const currentHashes = beltItems.map((entry) => entry.item.marketHashName);
+    const hashSet = new Set(currentHashes);
+
+    const kept = orderedHashesRef.current.filter((hash) => hashSet.has(hash));
+    const keptSet = new Set(kept);
+    const incoming = currentHashes.filter((hash) => !keptSet.has(hash));
+    const nextOrder = [...incoming, ...kept];
+
+    orderedHashesRef.current = nextOrder;
+
+    const ordered = nextOrder
+      .map((hash) => itemByHash.get(hash))
+      .filter((entry): entry is (typeof beltItems)[number] => Boolean(entry));
+
+    const entering = hasInitializedRef.current
+      ? new Set(
+          incoming.filter((hash) => !previousVisibleHashesRef.current.has(hash)),
+        )
+      : new Set<string>();
+
+    previousVisibleHashesRef.current = hashSet;
+    hasInitializedRef.current = true;
+
+    return {
+      orderedBeltItems: ordered,
+      enteringHashes: entering,
+    };
+  }, [beltItems]);
+
+  if (orderedBeltItems.length === 0) {
     return null;
   }
 
-  const shouldLoop = beltItems.length >= 3;
-  const loopItems = shouldLoop ? [...beltItems, ...beltItems] : beltItems;
+  const shouldLoop = orderedBeltItems.length >= 3;
+  const loopItems = shouldLoop
+    ? [...orderedBeltItems, ...orderedBeltItems]
+    : orderedBeltItems;
 
   return (
     <div className="watchlist-belt-wrap overflow-hidden">
@@ -291,8 +329,12 @@ export function WatchlistTargetShowcase({
       >
         {loopItems.map((entry, index) => (
           <li
-            className={`panel-inset min-w-[260px] px-3 py-2 ${getBeltItemClass(entry.status)}`}
-            key={`${entry.item.marketHashName}-${index}`}
+            className={`panel-inset min-w-[260px] px-3 py-2 ${getBeltItemClass(entry.status)} ${enteringHashes.has(entry.item.marketHashName) ? "watchlist-belt-item-enter" : ""}`}
+            key={
+              shouldLoop && index >= orderedBeltItems.length
+                ? `${entry.item.marketHashName}-clone`
+                : entry.item.marketHashName
+            }
           >
             <div className="flex items-start gap-3">
               {entry.item.iconUrl ? (
