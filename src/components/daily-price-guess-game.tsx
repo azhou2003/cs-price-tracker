@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fetchDailyPriceGuessGame,
@@ -18,11 +18,24 @@ import type {
   DailyPriceGuessChallengeResponse,
 } from "@/lib/types";
 
+const EMPTY_STATS: DailyGameStatsState = {
+  orderByPrice: { played: 0, wins: 0, currentStreak: 0, bestStreak: 0 },
+  priceGuess: { played: 0, wins: 0, currentStreak: 0, bestStreak: 0 },
+};
+
 type SavedDailyPriceGuessState = {
   dayKey: string;
   attempts: DailyPriceGuessAttemptResponse[];
   challenge?: DailyPriceGuessChallengeResponse;
 };
+
+type SavedDailyPriceGuessChallengeCache = {
+  dayKey: string;
+  challenge: DailyPriceGuessChallengeResponse;
+};
+
+const DAILY_PRICE_GUESS_CHALLENGE_CACHE_KEY =
+  "cs-price-tracker:daily-price-guess-challenge:v1";
 
 function getUtcDayKeyNow() {
   const now = new Date();
@@ -80,24 +93,47 @@ function saveState(
   );
 }
 
+function loadCachedChallenge(dayKey: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(DAILY_PRICE_GUESS_CHALLENGE_CACHE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as SavedDailyPriceGuessChallengeCache;
+    if (parsed.dayKey !== dayKey || !parsed.challenge) {
+      return null;
+    }
+
+    return parsed.challenge;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedChallenge(challenge: DailyPriceGuessChallengeResponse) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    DAILY_PRICE_GUESS_CHALLENGE_CACHE_KEY,
+    JSON.stringify({
+      dayKey: challenge.dayKey,
+      challenge,
+    } satisfies SavedDailyPriceGuessChallengeCache),
+  );
+}
+
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
   }).format(value);
-}
-
-function formatUtcTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(date);
 }
 
 function getArrow(attempt: DailyPriceGuessAttemptResponse) {
@@ -113,14 +149,12 @@ function getArrow(attempt: DailyPriceGuessAttemptResponse) {
 }
 
 function getArrowColor(attempt: DailyPriceGuessAttemptResponse) {
-  if (attempt.isCorrect) {
-    return "hsl(120 55% 56%)";
-  }
-
-  const closeness = Math.max(0, Math.min(1, attempt.proximityScore));
-  const hue = Math.round(5 + closeness * 48);
-  const lightness = Math.round(38 + closeness * 24);
-  return `hsl(${hue} 86% ${lightness}%)`;
+  const base = Math.max(attempt.actualAmount, 0.01);
+  const distancePercent = Math.abs(attempt.guess - attempt.actualAmount) / base;
+  const normalized = Math.max(0, Math.min(1, distancePercent));
+  const hue = Math.round(48 - normalized * 48);
+  const lightness = Math.round(58 - normalized * 18);
+  return `hsl(${hue} 88% ${lightness}%)`;
 }
 
 export function DailyPriceGuessGame() {
@@ -130,7 +164,12 @@ export function DailyPriceGuessGame() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<DailyGameStatsState>(() => loadDailyGameStats());
+  const [stats, setStats] = useState<DailyGameStatsState>(EMPTY_STATS);
+  const guessInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setStats(loadDailyGameStats());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +180,7 @@ export function DailyPriceGuessGame() {
 
       const todayKey = getUtcDayKeyNow();
       const savedToday = loadSavedState(todayKey);
+
       if (
         savedToday?.challenge &&
         savedToday.challenge.dayKey === todayKey &&
@@ -156,11 +196,31 @@ export function DailyPriceGuessGame() {
         return;
       }
 
+      const cachedChallenge =
+        savedToday?.challenge && savedToday.challenge.dayKey === todayKey
+          ? savedToday.challenge
+          : loadCachedChallenge(todayKey);
+
+      if (cachedChallenge) {
+        if (!cancelled) {
+          setStats(loadDailyGameStats());
+          setChallenge(cachedChallenge);
+          setAttempts(
+            (savedToday?.attempts ?? []).slice(0, cachedChallenge.maxAttempts),
+          );
+          setIsLoading(false);
+        }
+
+        return;
+      }
+
       try {
         const nextChallenge = await fetchDailyPriceGuessGame();
         if (cancelled) {
           return;
         }
+
+        saveCachedChallenge(nextChallenge);
 
         const saved = loadSavedState(nextChallenge.dayKey);
         setStats(loadDailyGameStats());
@@ -202,7 +262,7 @@ export function DailyPriceGuessGame() {
 
   const isComplete = Boolean(solvedAttempt) || (challenge ? remainingAttempts === 0 : false);
 
-  const onSubmit = async () => {
+  const submitGuess = async () => {
     if (!challenge || isComplete) {
       return;
     }
@@ -210,6 +270,9 @@ export function DailyPriceGuessGame() {
     const guess = Number(guessInput);
     if (!Number.isFinite(guess) || guess < 0) {
       setError("Enter a valid non-negative number.");
+      window.requestAnimationFrame(() => {
+        guessInputRef.current?.focus();
+      });
       return;
     }
 
@@ -237,6 +300,12 @@ export function DailyPriceGuessGame() {
       setAttempts(nextAttempts);
       setGuessInput("");
       saveState(challenge.dayKey, nextAttempts, challenge);
+
+      if (!completed) {
+        window.requestAnimationFrame(() => {
+          guessInputRef.current?.focus();
+        });
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -251,7 +320,7 @@ export function DailyPriceGuessGame() {
   const revealedPrice = solvedAttempt ?? attempts.at(-1) ?? null;
 
   return (
-    <article className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-6 shadow-[0_12px_26px_rgba(0,0,0,0.34)]">
+    <article className="flex h-full flex-col rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-4 shadow-[0_12px_26px_rgba(0,0,0,0.34)] sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[#89a9c3]">
@@ -259,16 +328,11 @@ export function DailyPriceGuessGame() {
           </p>
           <h2 className="mt-1 text-xl font-semibold text-[#d9e7f5]">Price Guess</h2>
         </div>
-        {challenge ? (
-          <p className="text-xs text-[#89a9c3]">
-            Resets {formatUtcTime(challenge.expiresAt)} (UTC)
-          </p>
-        ) : null}
       </div>
 
       <p className="mt-2 text-sm text-[#9fb5ca]">
         Guess today&apos;s item price in up to 5 attempts. You win if you are within
-        $0.50.
+        5%.
       </p>
       <p className="mt-1 text-xs text-[#89a9c3]">
         Record {stats.priceGuess.wins}/{stats.priceGuess.played} wins • Streak {stats.priceGuess.currentStreak}
@@ -279,21 +343,23 @@ export function DailyPriceGuessGame() {
 
       {!isLoading && challenge ? (
         <>
-          <div className="mt-4 rounded-md border border-[#2d3f52] bg-[#111b27]/85 p-3">
-            <div className="flex items-center gap-3">
+          <div className="mt-4 rounded-md border border-[#2d3f52] bg-[#111b27]/85 p-4">
+            <div className="flex items-start gap-3 sm:items-center">
               {challenge.item.iconUrl ? (
                 <Image
                   alt={challenge.item.displayName}
                   className="rounded-md border border-slate-700 bg-slate-900"
-                  height={44}
+                  height={48}
                   src={challenge.item.iconUrl}
-                  width={44}
+                  width={48}
                 />
               ) : (
-                <span className="h-11 w-11 rounded-md border border-slate-700 bg-slate-900" />
+                <span className="h-12 w-12 rounded-md border border-slate-700 bg-slate-900" />
               )}
-              <div>
-                <p className="text-sm font-medium text-[#d9e7f5]">{challenge.item.displayName}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-snug text-[#d9e7f5] [overflow-wrap:anywhere]">
+                  {challenge.item.displayName}
+                </p>
                 <p className="text-xs text-[#89a9c3]">
                   Attempts left: {remainingAttempts}/{challenge.maxAttempts}
                 </p>
@@ -302,29 +368,33 @@ export function DailyPriceGuessGame() {
           </div>
 
           {!isComplete ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <form
+              className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitGuess();
+              }}
+            >
               <input
-                className="w-full max-w-xs rounded-md border border-[#31465d] bg-[#0d141d] px-4 py-2.5 text-sm text-[#d9e7f5] outline-none focus:border-[#66c0f4]"
+                className="no-spinner w-full rounded-md border border-[#31465d] bg-[#0d141d] px-4 py-3 text-base text-[#d9e7f5] outline-none focus:border-[#66c0f4] sm:max-w-xs sm:py-2.5 sm:text-sm"
                 inputMode="decimal"
                 min="0"
                 onChange={(event) => {
                   setGuessInput(event.target.value);
                 }}
                 placeholder="Enter USD guess, e.g. 34.25"
+                ref={guessInputRef}
                 type="number"
                 value={guessInput}
               />
               <button
-                className="cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2.5 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 disabled={isSubmitting}
-                onClick={() => {
-                  void onSubmit();
-                }}
-                type="button"
+                type="submit"
               >
                 {isSubmitting ? "Checking..." : "Submit Guess"}
               </button>
-            </div>
+            </form>
           ) : null}
 
           {isComplete && revealedPrice ? (
@@ -338,26 +408,22 @@ export function DailyPriceGuessGame() {
               const arrowColor = getArrowColor(attempt);
               return (
                 <li
-                  className="flex items-center justify-between gap-3 rounded-md border border-[#2d3f52] bg-[#111b27]/85 px-3 py-2"
+                  className="flex flex-col gap-2 rounded-md border border-[#2d3f52] bg-[#111b27]/85 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                   key={`${attempt.guess}-${index}`}
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-5 text-xs text-[#89a9c3]">#{index + 1}</span>
-                    <span className="text-sm text-[#d9e7f5]">{formatUsd(attempt.guess)}</span>
+                    <span className="w-6 text-sm text-[#89a9c3]">#{index + 1}</span>
+                    <span className="text-sm font-medium text-[#d9e7f5]">{formatUsd(attempt.guess)}</span>
                     <span
-                      className="text-base font-bold"
+                      className="text-lg font-bold"
                       style={{ color: arrowColor }}
                     >
                       {getArrow(attempt)}
                     </span>
                   </div>
-                  <span
-                    className={`text-xs font-semibold ${
-                      attempt.isCorrect ? "text-[#9fd58f]" : "text-[#f0b37a]"
-                    }`}
-                  >
-                    {attempt.isCorrect ? "Correct" : attempt.direction === "higher" ? "Go higher" : "Go lower"}
-                  </span>
+                  {attempt.isCorrect ? (
+                    <span className="text-sm font-semibold text-[#9fd58f]">Correct</span>
+                  ) : null}
                 </li>
               );
             })}

@@ -3,7 +3,7 @@ import {
   getUtcDayKeyNow,
 } from "@/lib/daily-game";
 
-const TOLERANCE_USD = 0.5;
+const TOLERANCE_PERCENT = 0.05;
 
 type GuessRequest = {
   dayKey?: string;
@@ -56,14 +56,15 @@ export async function POST(request: Request) {
   try {
     const challenge = await getOrCreateDailyPriceGuessChallenge(requestedDay);
     const target = challenge.item.amount;
+    const toleranceUsd = target * TOLERANCE_PERCENT;
     const difference = Math.abs(target - guess);
-    const isCorrect = difference <= TOLERANCE_USD;
+    const isCorrect = difference <= toleranceUsd;
 
     return Response.json(
       {
         dayKey: challenge.dayKey,
         guess,
-        toleranceUsd: TOLERANCE_USD,
+        toleranceUsd,
         difference,
         isCorrect,
         direction: isCorrect ? "exact" : guess < target ? "higher" : "lower",

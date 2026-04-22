@@ -4,7 +4,7 @@ import {
 } from "@/lib/daily-game";
 
 const MAX_ATTEMPTS = 5;
-const TOLERANCE_USD = 0.5;
+const TOLERANCE_PERCENT = 0.05;
 
 export async function GET() {
   const dayKey = getUtcDayKeyNow();
@@ -18,7 +18,7 @@ export async function GET() {
         generatedAt: challenge.generatedAt,
         expiresAt: challenge.expiresAt,
         maxAttempts: MAX_ATTEMPTS,
-        toleranceUsd: TOLERANCE_USD,
+        toleranceUsd: challenge.item.amount * TOLERANCE_PERCENT,
         item: {
           marketHashName: challenge.item.marketHashName,
           displayName: challenge.item.displayName,

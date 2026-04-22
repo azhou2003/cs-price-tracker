@@ -1,3 +1,4 @@
+import { DailyGamesResetBanner } from "@/components/daily-games-reset-banner";
 import { DailyPriceGame } from "@/components/daily-price-game";
 import { DailyPriceGuessGame } from "@/components/daily-price-guess-game";
 
@@ -8,8 +9,11 @@ export const metadata = {
 export default function GamesPage() {
   return (
     <section className="space-y-5">
-      <DailyPriceGame />
-      <DailyPriceGuessGame />
+      <DailyGamesResetBanner />
+      <div className="grid gap-5 lg:grid-cols-2">
+        <DailyPriceGame />
+        <DailyPriceGuessGame />
+      </div>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchDailyGame, submitDailyGameGuess } from "@/lib/api-client";
 import {
@@ -22,6 +22,19 @@ type SavedDailyResult = {
   orderedMarketHashNames?: string[];
   result: DailyGameGuessResponse;
   challenge?: DailyGameChallengeResponse;
+};
+
+type SavedDailyChallengeCache = {
+  dayKey: string;
+  challenge: DailyGameChallengeResponse;
+};
+
+const MOBILE_LONG_PRESS_MS = 90;
+const TOUCH_MOVE_CANCEL_PX = 5;
+const DAILY_GAME_CHALLENGE_CACHE_KEY = "cs-price-tracker:daily-game-challenge:v1";
+const EMPTY_STATS: DailyGameStatsState = {
+  orderByPrice: { played: 0, wins: 0, currentStreak: 0, bestStreak: 0 },
+  priceGuess: { played: 0, wins: 0, currentStreak: 0, bestStreak: 0 },
 };
 
 function getUtcDayKeyNow() {
@@ -75,6 +88,42 @@ function saveResult(
   );
 }
 
+function loadCachedChallenge(dayKey: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(DAILY_GAME_CHALLENGE_CACHE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as SavedDailyChallengeCache;
+    if (parsed.dayKey !== dayKey || !parsed.challenge) {
+      return null;
+    }
+
+    return parsed.challenge;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedChallenge(challenge: DailyGameChallengeResponse) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    DAILY_GAME_CHALLENGE_CACHE_KEY,
+    JSON.stringify({
+      dayKey: challenge.dayKey,
+      challenge,
+    } satisfies SavedDailyChallengeCache),
+  );
+}
+
 function moveItem(items: DailyGameItem[], from: number, to: number) {
   const next = [...items];
   const [picked] = next.splice(from, 1);
@@ -84,32 +133,6 @@ function moveItem(items: DailyGameItem[], from: number, to: number) {
 
   next.splice(to, 0, picked);
   return next;
-}
-
-function moveItemToDropIndex(items: DailyGameItem[], from: number, dropIndex: number) {
-  const next = [...items];
-  const [picked] = next.splice(from, 1);
-  if (!picked) {
-    return items;
-  }
-
-  const normalized = from < dropIndex ? dropIndex - 1 : dropIndex;
-  const bounded = Math.max(0, Math.min(normalized, next.length));
-  next.splice(bounded, 0, picked);
-  return next;
-}
-
-function formatUtcTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(date);
 }
 
 function formatUsd(value: number) {
@@ -158,9 +181,122 @@ export function DailyPriceGame() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [stats, setStats] = useState<DailyGameStatsState>(() => loadDailyGameStats());
+  const [activeDragHash, setActiveDragHash] = useState<string | null>(null);
+  const [dragPreview, setDragPreview] = useState<{
+    item: DailyGameItem;
+    left: number;
+    width: number;
+    offsetY: number;
+    clientY: number;
+  } | null>(null);
+  const [stats, setStats] = useState<DailyGameStatsState>(EMPTY_STATS);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const dragHoldTimeoutRef = useRef<number | null>(null);
+  const dragPointerIdRef = useRef<number | null>(null);
+  const activeDragHashRef = useRef<string | null>(null);
+  const pendingTouchRef = useRef<{
+    pointerId: number;
+    index: number;
+    startX: number;
+    startY: number;
+    latestY: number;
+    rowRect: DOMRect;
+    listRect: DOMRect;
+  } | null>(null);
+  const moveRafRef = useRef<number | null>(null);
+  const pendingMoveYRef = useRef<number | null>(null);
+
+  const clearDragHoldTimeout = () => {
+    if (dragHoldTimeoutRef.current !== null) {
+      window.clearTimeout(dragHoldTimeoutRef.current);
+      dragHoldTimeoutRef.current = null;
+    }
+  };
+
+  const clearMoveRaf = () => {
+    if (moveRafRef.current !== null) {
+      window.cancelAnimationFrame(moveRafRef.current);
+      moveRafRef.current = null;
+    }
+  };
+
+  const clearPendingTouch = () => {
+    pendingTouchRef.current = null;
+    clearDragHoldTimeout();
+  };
+
+  const clearDragState = () => {
+    clearPendingTouch();
+    clearMoveRaf();
+    pendingMoveYRef.current = null;
+    setActiveDragHash(null);
+    setDragPreview(null);
+    dragPointerIdRef.current = null;
+    activeDragHashRef.current = null;
+  };
+
+  const getInsertIndexForClientY = (
+    clientY: number,
+    items: DailyGameItem[],
+    activeHash: string,
+  ) => {
+    const withoutActive = items.filter((item) => item.marketHashName !== activeHash);
+
+    for (let index = 0; index < withoutActive.length; index += 1) {
+      const item = withoutActive[index];
+      const row = rowRefs.current[item.marketHashName];
+      if (!row) {
+        continue;
+      }
+
+      const rect = row.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        return index;
+      }
+    }
+
+    return withoutActive.length;
+  };
+
+  const startDrag = (
+    index: number,
+    pointerId: number,
+    clientY: number,
+    rowRect: DOMRect,
+    listRect: DOMRect,
+  ) => {
+    const item = orderedItems[index];
+    if (!item) {
+      return;
+    }
+
+    clearPendingTouch();
+    dragPointerIdRef.current = pointerId;
+    activeDragHashRef.current = item.marketHashName;
+    setActiveDragHash(item.marketHashName);
+    setDragPreview({
+      item,
+      left: listRect.left,
+      width: listRect.width,
+      offsetY: clientY - rowRect.top,
+      clientY,
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      clearPendingTouch();
+      clearMoveRaf();
+      pendingMoveYRef.current = null;
+      dragPointerIdRef.current = null;
+      activeDragHashRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    setStats(loadDailyGameStats());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,34 +307,37 @@ export function DailyPriceGame() {
 
       const todayKey = getUtcDayKeyNow();
       const savedToday = loadSavedResult(todayKey);
-      if (savedToday?.challenge && savedToday.challenge.dayKey === todayKey) {
+      const cachedChallenge =
+        savedToday?.challenge && savedToday.challenge.dayKey === todayKey
+          ? savedToday.challenge
+          : loadCachedChallenge(todayKey);
+
+      if (cachedChallenge) {
         const savedResult = isSavedResultCompatible(
-          savedToday.challenge.items,
-          savedToday.result,
+          cachedChallenge.items,
+          savedToday?.result,
         )
-          ? savedToday.result
+          ? savedToday?.result
           : null;
         const savedOrder =
-          savedToday.orderedMarketHashNames ?? savedResult?.submittedOrder;
+          savedToday?.orderedMarketHashNames ?? savedResult?.submittedOrder;
         const ordered = savedOrder
           ? savedOrder
               .map((hash) =>
-                savedToday.challenge?.items.find(
-                  (item) => item.marketHashName === hash,
-                ),
+                cachedChallenge.items.find((item) => item.marketHashName === hash),
               )
               .filter((item): item is DailyGameItem => Boolean(item))
-          : savedToday.challenge.items;
+          : cachedChallenge.items;
 
         if (!cancelled) {
           setStats(loadDailyGameStats());
-          setChallenge(savedToday.challenge);
+          setChallenge(cachedChallenge);
           setOrderedItems(
-            ordered.length === savedToday.challenge.items.length
+            ordered.length === cachedChallenge.items.length
               ? ordered
-              : savedToday.challenge.items,
+              : cachedChallenge.items,
           );
-          setResult(savedResult);
+          setResult(savedResult ?? null);
           setIsLoading(false);
         }
 
@@ -210,6 +349,8 @@ export function DailyPriceGame() {
         if (cancelled) {
           return;
         }
+
+        saveCachedChallenge(nextChallenge);
 
         const saved = loadSavedResult(nextChallenge.dayKey);
         const savedResult: DailyGameGuessResponse | null =
@@ -309,9 +450,266 @@ export function DailyPriceGame() {
     }
   };
 
+  const processDragMove = (clientY: number) => {
+    const activeHash = activeDragHashRef.current;
+    if (!activeHash) {
+      return;
+    }
+
+    setDragPreview((currentPreview) =>
+      currentPreview ? { ...currentPreview, clientY } : currentPreview,
+    );
+    setOrderedItems((currentItems) => {
+      const activeIndex = currentItems.findIndex(
+        (item) => item.marketHashName === activeHash,
+      );
+      if (activeIndex === -1) {
+        return currentItems;
+      }
+
+      const nextIndex = getInsertIndexForClientY(clientY, currentItems, activeHash);
+      if (nextIndex === activeIndex) {
+        return currentItems;
+      }
+
+      return moveItem(currentItems, activeIndex, nextIndex);
+    });
+  };
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const pendingTouch = pendingTouchRef.current;
+      if (pendingTouch && event.pointerId === pendingTouch.pointerId) {
+        const deltaX = event.clientX - pendingTouch.startX;
+        const deltaY = event.clientY - pendingTouch.startY;
+        const moved = Math.hypot(deltaX, deltaY) > TOUCH_MOVE_CANCEL_PX;
+        if (moved) {
+          clearPendingTouch();
+          return;
+        }
+
+        pendingTouch.latestY = event.clientY;
+        return;
+      }
+
+      if (dragPointerIdRef.current === null || event.pointerId !== dragPointerIdRef.current) {
+        return;
+      }
+
+      pendingMoveYRef.current = event.clientY;
+      if (moveRafRef.current === null) {
+        moveRafRef.current = window.requestAnimationFrame(() => {
+          moveRafRef.current = null;
+          const nextY = pendingMoveYRef.current;
+          if (typeof nextY !== "number") {
+            return;
+          }
+
+          processDragMove(nextY);
+        });
+      }
+
+      if (event.pointerType === "touch" && event.cancelable) {
+        event.preventDefault();
+      }
+    };
+
+    const onPointerEnd = (event: PointerEvent) => {
+      const pendingTouch = pendingTouchRef.current;
+      if (pendingTouch && event.pointerId === pendingTouch.pointerId) {
+        clearPendingTouch();
+        return;
+      }
+
+      if (dragPointerIdRef.current === null || event.pointerId !== dragPointerIdRef.current) {
+        return;
+      }
+
+      clearDragState();
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, []);
+
+  const isDragging = !result && activeDragHash !== null;
+
+  const renderRow = (
+    item: DailyGameItem,
+    itemIndex: number,
+    displayIndex: number,
+  ) => {
+    const isCorrect = correctByPosition?.[itemIndex] === item.marketHashName;
+    const showResultStyles = Boolean(result);
+    const isGhostRow = isDragging && activeDragHash === item.marketHashName;
+
+    let rowClass = "border-[#2d3f52] bg-[#111b27]/85 hover:bg-[#152131]";
+
+    if (showResultStyles && isCorrect) {
+      rowClass = "border-[#3f6a33] bg-[#1d3221]";
+    }
+
+    if (showResultStyles && !isCorrect) {
+      rowClass = "border-[#7b3e3e] bg-[#3a1f24]";
+    }
+
+    if (isGhostRow) {
+      return (
+        <li
+          className="relative select-none rounded-lg border border-dashed border-[#66c0f4] bg-[#122739]/70 px-4 py-3 shadow-[inset_0_0_0_1px_rgba(102,192,244,0.18)]"
+          key={item.marketHashName}
+          ref={(node) => {
+            rowRefs.current[item.marketHashName] = node;
+          }}
+          style={{
+            touchAction: "none",
+          }}
+        >
+          <div className="h-10" />
+        </li>
+      );
+    }
+
+    return (
+      <li
+        className={`relative select-none rounded-lg border px-4 py-3 transition-transform duration-150 ${rowClass}`}
+        key={item.marketHashName}
+        ref={(node) => {
+          rowRefs.current[item.marketHashName] = node;
+        }}
+        style={{
+          touchAction: result ? "auto" : "manipulation",
+        }}
+        onPointerCancel={() => {
+          clearDragHoldTimeout();
+        }}
+        onPointerDown={(event) => {
+          if (result || isDragging) {
+            return;
+          }
+
+          if (event.pointerType === "mouse" && event.button !== 0) {
+            return;
+          }
+
+          const rowRect = event.currentTarget.getBoundingClientRect();
+          const listRect = listRef.current?.getBoundingClientRect();
+          if (!listRect) {
+            return;
+          }
+
+          const beginDrag = () => {
+            startDrag(itemIndex, event.pointerId, event.clientY, rowRect, listRect);
+          };
+
+          clearPendingTouch();
+          if (event.pointerType === "touch") {
+            pendingTouchRef.current = {
+              pointerId: event.pointerId,
+              index: itemIndex,
+              startX: event.clientX,
+              startY: event.clientY,
+              latestY: event.clientY,
+              rowRect,
+              listRect,
+            };
+            dragHoldTimeoutRef.current = window.setTimeout(() => {
+              const pendingTouch = pendingTouchRef.current;
+              if (!pendingTouch || pendingTouch.pointerId !== event.pointerId) {
+                return;
+              }
+
+              startDrag(
+                pendingTouch.index,
+                pendingTouch.pointerId,
+                pendingTouch.latestY,
+                pendingTouch.rowRect,
+                pendingTouch.listRect,
+              );
+            }, MOBILE_LONG_PRESS_MS);
+            return;
+          }
+
+          event.preventDefault();
+          beginDrag();
+        }}
+        onPointerLeave={() => {
+          clearPendingTouch();
+        }}
+        onPointerUp={() => {
+          clearPendingTouch();
+        }}
+      >
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="w-7 text-center text-sm font-semibold text-[#89a9c3]">
+              {displayIndex + 1}
+            </span>
+            {item.iconUrl ? (
+              <Image
+                alt={item.displayName}
+                className="rounded-md border border-slate-700 bg-slate-900"
+                height={40}
+                src={item.iconUrl}
+                width={40}
+              />
+            ) : (
+              <span className="h-10 w-10 rounded-md border border-slate-700 bg-slate-900" />
+            )}
+            <span className="min-w-0 text-sm leading-snug text-[#d9e7f5] [overflow-wrap:anywhere]">
+              {item.displayName}
+            </span>
+          </div>
+          {!result ? (
+            <div className="flex items-center justify-end">
+              <span
+                aria-hidden
+                className="ml-1 grid cursor-grab select-none grid-cols-2 gap-0.5 active:cursor-grabbing"
+              >
+                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+              </span>
+            </div>
+          ) : (
+            <div className="text-right">
+              <p
+                className={`text-xs font-semibold ${
+                  isCorrect ? "text-[#9fd58f]" : "text-[#f0a5a5]"
+                }`}
+              >
+                {isCorrect ? "Correct" : "Incorrect"}
+              </p>
+              <p className="text-xs text-[#c7d5e0]">
+                {(() => {
+                  const priced = resultByHash?.get(item.marketHashName);
+                  if (!priced) {
+                    return "Price unavailable";
+                  }
+
+                  return priced.priceText ?? formatUsd(priced.amount);
+                })()}
+              </p>
+            </div>
+          )}
+        </div>
+      </li>
+    );
+  };
+
   return (
-    <section className="space-y-5 pb-4">
-      <article className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-6 shadow-[0_12px_26px_rgba(0,0,0,0.34)]">
+    <section className="h-full">
+      <article className="flex h-full flex-col rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-4 shadow-[0_12px_26px_rgba(0,0,0,0.34)] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] uppercase tracking-[0.22em] text-[#89a9c3]">
@@ -319,15 +717,10 @@ export function DailyPriceGame() {
             </p>
             <h2 className="mt-1 text-xl font-semibold text-[#d9e7f5]">Order By Price</h2>
           </div>
-          {challenge ? (
-            <p className="text-xs text-[#89a9c3]">
-              Resets {formatUtcTime(challenge.expiresAt)} (UTC)
-            </p>
-          ) : null}
         </div>
 
         <p className="mt-2 text-sm text-[#9fb5ca]">
-          Drag to rank today&apos;s 5 items from lowest to highest Steam market price.
+          Rank today&apos;s 5 items from lowest to highest Steam market price.
         </p>
         <p className="mt-1 text-xs text-[#89a9c3]">
           Record {stats.orderByPrice.wins}/{stats.orderByPrice.played} wins • Streak {stats.orderByPrice.currentStreak}
@@ -338,170 +731,41 @@ export function DailyPriceGame() {
 
         {!isLoading && challenge ? (
           <>
-            <ul className="mt-4 space-y-2">
-              {orderedItems.map((item, index) => {
-                const isCorrect =
-                  correctByPosition?.[index] === item.marketHashName;
-                const showResultStyles = Boolean(result);
-
-                let rowClass =
-                  "border-[#2d3f52] bg-[#111b27]/85 hover:bg-[#152131]";
-
-                if (showResultStyles && isCorrect) {
-                  rowClass = "border-[#3f6a33] bg-[#1d3221]";
-                }
-
-                if (showResultStyles && !isCorrect) {
-                  rowClass = "border-[#7b3e3e] bg-[#3a1f24]";
-                }
-
-                const showTopDrop = !result && draggingIndex !== null && dropIndex === index;
-                const showBottomDrop =
-                  !result &&
-                  draggingIndex !== null &&
-                  dropIndex === index + 1 &&
-                  index === orderedItems.length - 1;
-
-                return (
-                  <li
-                    className={`relative rounded-md border px-3 py-2 transition ${rowClass} ${
-                      draggingIndex === index ? "opacity-70" : ""
-                    }`}
-                    draggable={!result}
-                    key={item.marketHashName}
-                    onDragEnd={() => {
-                      setDraggingIndex(null);
-                      setDropIndex(null);
-                    }}
-                    onDragOver={(event) => {
-                      if (result || draggingIndex === null) {
-                        return;
-                      }
-
-                      event.preventDefault();
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      const before = event.clientY < rect.top + rect.height / 2;
-                      const nextDropIndex = before ? index : index + 1;
-
-                      if (dropIndex !== nextDropIndex) {
-                        setDropIndex(nextDropIndex);
-                      }
-                    }}
-                    onDragStart={() => {
-                      if (result) {
-                        return;
-                      }
-
-                      setDraggingIndex(index);
-                      setDropIndex(index);
-                    }}
-                    onDrop={(event) => {
-                      if (result || draggingIndex === null) {
-                        return;
-                      }
-
-                      event.preventDefault();
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      const before = event.clientY < rect.top + rect.height / 2;
-                      const nextDropIndex = before ? index : index + 1;
-
-                      setOrderedItems((current) =>
-                        moveItemToDropIndex(current, draggingIndex, nextDropIndex),
-                      );
-                      setDraggingIndex(null);
-                      setDropIndex(null);
-                    }}
-                  >
-                    {showTopDrop ? (
-                      <span className="pointer-events-none absolute left-2 right-2 top-0 h-0.5 rounded-full bg-[#66c0f4]" />
-                    ) : null}
-                    {showBottomDrop ? (
-                      <span className="pointer-events-none absolute left-2 right-2 bottom-0 h-0.5 rounded-full bg-[#66c0f4]" />
-                    ) : null}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="w-6 text-center text-sm font-semibold text-[#89a9c3]">
-                          {index + 1}
-                        </span>
-                        {item.iconUrl ? (
-                          <Image
-                            alt={item.displayName}
-                            className="rounded-md border border-slate-700 bg-slate-900"
-                            height={36}
-                            src={item.iconUrl}
-                            width={36}
-                          />
-                        ) : (
-                          <span className="h-9 w-9 rounded-md border border-slate-700 bg-slate-900" />
-                        )}
-                        <span className="truncate text-sm text-[#d9e7f5]">
-                          {item.displayName}
-                        </span>
-                      </div>
-                      {!result ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            className="cursor-pointer rounded-md border border-[#2f4256] bg-[#162230] px-2 py-1 text-xs text-[#c7d5e0] hover:bg-[#1f3245] disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={index === 0}
-                            onClick={() => {
-                              if (index === 0) {
-                                return;
-                              }
-
-                              setOrderedItems((current) => moveItem(current, index, index - 1));
-                            }}
-                            type="button"
-                          >
-                            Up
-                          </button>
-                          <button
-                            className="cursor-pointer rounded-md border border-[#2f4256] bg-[#162230] px-2 py-1 text-xs text-[#c7d5e0] hover:bg-[#1f3245] disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={index === orderedItems.length - 1}
-                            onClick={() => {
-                              if (index === orderedItems.length - 1) {
-                                return;
-                              }
-
-                              setOrderedItems((current) => moveItem(current, index, index + 1));
-                            }}
-                            type="button"
-                          >
-                            Down
-                          </button>
-                          <span className="ml-1 select-none text-xs tracking-[0.06em] text-[#89a9c3]">
-                            Drag :::
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-right">
-                          <p
-                            className={`text-xs font-semibold ${
-                              isCorrect ? "text-[#9fd58f]" : "text-[#f0a5a5]"
-                            }`}
-                          >
-                            {isCorrect ? "Correct" : "Incorrect"}
-                          </p>
-                          <p className="text-xs text-[#c7d5e0]">
-                            {(() => {
-                              const priced = resultByHash?.get(item.marketHashName);
-                              if (!priced) {
-                                return "Price unavailable";
-                              }
-
-                              return priced.priceText ?? formatUsd(priced.amount);
-                            })()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
+            <ul className="mt-4 space-y-2.5" ref={listRef}>
+              {orderedItems.map((item, index) => renderRow(item, index, index))}
             </ul>
+
+            {dragPreview ? (
+              <div
+                className="pointer-events-none fixed z-40 rounded-lg border border-[#66c0f4] bg-[#142536]/95 px-4 py-3 shadow-[0_16px_32px_rgba(0,0,0,0.42)]"
+                style={{
+                  left: `${dragPreview.left}px`,
+                  top: `${Math.max(8, dragPreview.clientY - dragPreview.offsetY)}px`,
+                  width: `${dragPreview.width}px`,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  {dragPreview.item.iconUrl ? (
+                    <Image
+                      alt={dragPreview.item.displayName}
+                      className="rounded-md border border-slate-700 bg-slate-900"
+                      height={38}
+                      src={dragPreview.item.iconUrl}
+                      width={38}
+                    />
+                  ) : (
+                    <span className="h-9 w-9 rounded-md border border-slate-700 bg-slate-900" />
+                  )}
+                  <span className="text-sm font-medium leading-snug text-[#d9e7f5] [overflow-wrap:anywhere]">
+                    {dragPreview.item.displayName}
+                  </span>
+                </div>
+              </div>
+            ) : null}
 
             {!result ? (
               <button
-                className="mt-4 cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:opacity-70"
+                className="mt-4 w-full cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2.5 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 disabled={!canSubmit || isSubmitting}
                 onClick={() => {
                   void onSubmit();
