@@ -1,16 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --background: #101822;
-  --foreground: #d6e2f0;
-  --steam-blue-900: #0b141d;
-  --steam-blue-800: #14212e;
-  --steam-blue-700: #1b2a3a;
-  --steam-blue-600: #23384d;
-  --steam-accent: #66c0f4;
-  --steam-accent-strong: #4b8bbd;
-  --steam-success: #8bc53f;
-  --steam-warn: #f0ad4e;
+  --background: #0d1014;
+  --foreground: #d5dae0;
+  --surface-0: #131920;
+  --surface-1: #181f27;
+  --surface-2: #1d2530;
+  --line: #2e3743;
+  --line-strong: #414d5d;
+  --text-dim: #98a2af;
+  --text-muted: #7f8996;
+  --accent: #8ca8c5;
+  --accent-strong: #a8bed4;
+  --buy: #86ab62;
+  --sell: #be9a62;
+  --danger: #b97b7b;
 }
 
 @theme inline {
@@ -26,10 +30,17 @@ body {
   background: var(--background);
   color: var(--foreground);
   background-image:
-    radial-gradient(circle at 12% 14%, rgb(102 192 244 / 0.18), transparent 28%),
-    radial-gradient(circle at 78% 18%, rgb(46 76 104 / 0.3), transparent 34%),
-    linear-gradient(160deg, #101822 0%, #0b141d 55%, #0f1a25 100%);
+    linear-gradient(rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    radial-gradient(circle at 22% -8%, rgb(161 189 216 / 0.12), transparent 44%),
+    linear-gradient(180deg, #10141a 0%, #0d1014 46%, #0b0e12 100%);
+  background-size:
+    30px 30px,
+    30px 30px,
+    auto,
+    auto;
   font-family: var(--font-geist-sans), sans-serif;
+  letter-spacing: 0.01em;
 }
 
 a,
@@ -38,6 +49,24 @@ input,
 select {
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease,
     box-shadow 140ms ease, opacity 140ms ease;
+}
+
+a[href],
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label[for],
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
 }
 
 .no-spinner::-webkit-outer-spin-button,
@@ -49,4 +78,238 @@ select {
 .no-spinner[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgb(28 35 44 / 0.92) 0%, rgb(20 26 33 / 0.95) 100%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.02) inset, 0 18px 30px rgb(0 0 0 / 0.32);
+}
+
+.panel-inset {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgb(20 26 34 / 0.88) 0%, rgb(15 20 26 / 0.92) 100%);
+}
+
+.label-caps {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.btn {
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  padding: 0.52rem 0.75rem;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-icon > svg,
+.btn-icon > span,
+.btn-icon > span > svg {
+  display: block;
+}
+
+.btn-primary {
+  border-color: #4e647d;
+  color: #dee8f1;
+  background: linear-gradient(180deg, #384b61 0%, #2a394a 100%);
+}
+
+.btn-primary:hover {
+  border-color: #5e7794;
+  background: linear-gradient(180deg, #435a73 0%, #324557 100%);
+  box-shadow: 0 0 0 1px rgb(125 155 186 / 0.24);
+}
+
+.btn-muted {
+  border-color: #3d4654;
+  color: #c7d0d8;
+  background: linear-gradient(180deg, #29323d 0%, #202830 100%);
+}
+
+.btn-muted:hover {
+  border-color: #49586c;
+  background: linear-gradient(180deg, #303b48 0%, #252f3a 100%);
+}
+
+.btn-danger {
+  border-color: #714c4c;
+  color: #f1d9d9;
+  background: linear-gradient(180deg, #553535 0%, #3f2727 100%);
+}
+
+.btn-danger:hover {
+  border-color: #8c6060;
+  background: linear-gradient(180deg, #654040 0%, #4d3030 100%);
+}
+
+.btn-warn {
+  border-color: #6f5d3f;
+  color: #ead8b8;
+  background: linear-gradient(180deg, #4a3f2d 0%, #3b3225 100%);
+}
+
+.btn-warn:hover {
+  border-color: #86714d;
+  background: linear-gradient(180deg, #5a4d37 0%, #473c2b 100%);
+}
+
+.field {
+  width: 100%;
+  border: 1px solid #3a4554;
+  border-radius: 2px;
+  background: #121820;
+  color: var(--foreground);
+  padding: 0.62rem 0.7rem;
+  font-size: 13px;
+}
+
+.field:focus {
+  outline: none;
+  border-color: #5b718a;
+  box-shadow: 0 0 0 1px rgb(132 156 180 / 0.24);
+}
+
+.chip {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  padding: 0.2rem 0.45rem;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chip-neutral {
+  color: #c2ccd7;
+  background: #27313d;
+  border-color: #3f4b59;
+}
+
+.chip-buy {
+  color: #d8e8c3;
+  background: #2d3a28;
+  border-color: #587448;
+}
+
+.chip-sell {
+  color: #ead4ac;
+  background: #3a3226;
+  border-color: #7e6844;
+}
+
+.chip-danger {
+  color: #efc6c6;
+  background: #3b2a2c;
+  border-color: #7e5358;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table thead {
+  border-bottom: 1px solid #374353;
+  background: #1b232e;
+  color: #9eadbd;
+}
+
+.data-table th {
+  padding: 0.68rem 0.75rem;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.data-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #24303e;
+  vertical-align: top;
+}
+
+@keyframes watchlist-belt-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.watchlist-belt-wrap {
+  position: relative;
+}
+
+.watchlist-belt-track {
+  animation: watchlist-belt-scroll 28s linear infinite;
+}
+
+.watchlist-belt-wrap:hover .watchlist-belt-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watchlist-belt-track {
+    animation: none;
+  }
+}
+
+@keyframes graph-line-enter {
+  from {
+    stroke-dashoffset: 100;
+    opacity: 0.35;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes graph-area-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.graph-line-enter {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: graph-line-enter 220ms ease-out;
+}
+
+.graph-area-enter {
+  animation: graph-area-enter 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-line-enter,
+  .graph-area-enter {
+    animation: none;
+  }
 }

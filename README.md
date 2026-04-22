@@ -15,7 +15,7 @@ Watchlist data, price history, game progress, and preferences are stored in the 
 - `/games` - Daily game modes:
   - Order 5 items from lowest to highest price
   - Guess the item price within tolerance
-- `/settings` - Local settings (refresh interval, notifications toggle, and clear local data)
+- `/settings` - Local settings (refresh interval, backup export/import, and clear local data)
 - `/search` - Redirects to `/`
 
 ## API Routes
@@ -53,6 +53,36 @@ npm run lint
 npm run build
 npm run start
 ```
+
+## Styling Guide
+
+The app uses a tactical esports visual language inspired by classic CS:GO menus.
+
+- Tone: dark, muted, compact, and information-dense.
+- Panels: sharp rectangular cards with subtle borders and restrained depth.
+- Typography: clean sans-serif with tight spacing and clear hierarchy.
+- Motion: minimal and purposeful (for example, the watchlist conveyor belt).
+- Accents: use color sparingly for state emphasis (`buy`, `sell`, `both`) rather than decoration.
+
+### Shared UI tokens and utility classes
+
+Core styling lives in `src/app/globals.css`.
+
+- Color tokens (`:root`): `--background`, `--foreground`, `--surface-*`, `--line`, `--text-*`, `--accent`, `--buy`, `--sell`, `--danger`.
+- Shared classes:
+  - Layout surfaces: `.panel`, `.panel-inset`
+  - Labels and inputs: `.label-caps`, `.field`
+  - Buttons: `.btn`, `.btn-primary`, `.btn-muted`, `.btn-danger`, `.btn-warn`
+  - Status chips: `.chip`, `.chip-neutral`, `.chip-buy`, `.chip-sell`, `.chip-danger`
+  - Tables: `.data-table`
+
+Prefer these shared classes before introducing one-off Tailwind color stacks.
+
+### Watchlist conveyor belt
+
+- Belt styles are defined by `.watchlist-belt-wrap` and `.watchlist-belt-track` in `src/app/globals.css`.
+- The belt pauses on hover and disables animation for reduced-motion users.
+- Item cards are state-tinted when triggered and neutral when not triggered.
 
 ## Notes
 

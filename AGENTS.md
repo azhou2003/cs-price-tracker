@@ -28,3 +28,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Proxy routes are in `src/app/api/*`; they use in-memory `Map` caches with short TTLs (search 30s, price 20s, item 5m).
 - `/api/history` is authenticated via request headers, not env vars: `x-steam-login-secure`, `x-steam-sessionid`, optional `x-steam-country`, `x-steam-extra-cookies`.
 - `/api/history` returns detailed upstream failure hints; avoid removing that diagnostics payload unless asked.
+
+## Styling guide (required)
+
+- UI direction: tactical esports (classic CS:GO menu/inventory feel), not playful or futuristic.
+- Keep layouts compact and information-dense.
+- Prefer sharp rectangular surfaces over rounded "cardy" styling.
+- Use dark muted foundations with subtle borders and restrained glow.
+- Use accent colors only for meaningful state emphasis (`buy`, `sell`, `both`, danger), not as broad decoration.
+
+### Reuse shared styles first
+
+- Primary style source is `src/app/globals.css`.
+- Reuse shared classes before introducing new one-off class stacks:
+  - `.panel`, `.panel-inset`
+  - `.label-caps`, `.field`
+  - `.btn`, `.btn-primary`, `.btn-muted`, `.btn-danger`, `.btn-warn`
+  - `.chip`, `.chip-neutral`, `.chip-buy`, `.chip-sell`, `.chip-danger`
+  - `.data-table`
+
+### Motion and accessibility
+
+- Animations must remain subtle and functional.
+- Any moving UI (like the watchlist belt) must:
+  - pause on hover/focus where appropriate
+  - respect `prefers-reduced-motion`
+
+### Watchlist belt behavior
+
+- Triggered items use status accents per-item.
+- If there are no triggers, show up to 5 random watchlist items in neutral styling.
+- Avoid showing duplicate items simultaneously.

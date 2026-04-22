@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { fetchDailyGame, submitDailyGameGuess } from "@/lib/api-client";
+import { GameShareOverlay } from "@/components/game-share-overlay";
+import { fetchDailyGame } from "@/lib/api-client";
 import {
   DAILY_GAME_STATE_KEY,
   loadDailyGameStats,
@@ -32,6 +33,8 @@ type SavedDailyChallengeCache = {
 const MOBILE_LONG_PRESS_MS = 90;
 const TOUCH_MOVE_CANCEL_PX = 5;
 const DAILY_GAME_CHALLENGE_CACHE_KEY = "cs-price-tracker:daily-game-challenge:v1";
+const SHARE_BASE_URL = "https://www.cspricetracker.com";
+const ORDER_BY_PRICE_ENDPOINT = "/games#order-by-price";
 const EMPTY_STATS: DailyGameStatsState = {
   orderByPrice: { played: 0, wins: 0, currentStreak: 0, bestStreak: 0 },
   priceGuess: { played: 0, wins: 0, currentStreak: 0, bestStreak: 0 },
@@ -174,6 +177,26 @@ function hasSameHashes(items: DailyGameItem[], rankedItems: DailyGameResultItem[
   return true;
 }
 
+function hasScoringData(item: DailyGameItem) {
+  return typeof item.amount === "number" && Number.isFinite(item.amount);
+}
+
+function hasChallengeScoringData(challenge: DailyGameChallengeResponse) {
+  return challenge.items.every(hasScoringData);
+}
+
+function getCorrectOrder(items: DailyGameItem[]) {
+  return [...items].sort((left, right) => {
+    const leftAmount = left.amount ?? Number.POSITIVE_INFINITY;
+    const rightAmount = right.amount ?? Number.POSITIVE_INFINITY;
+    if (leftAmount === rightAmount) {
+      return left.marketHashName.localeCompare(right.marketHashName);
+    }
+
+    return leftAmount - rightAmount;
+  });
+}
+
 export function DailyPriceGame() {
   const [challenge, setChallenge] = useState<DailyGameChallengeResponse | null>(null);
   const [orderedItems, setOrderedItems] = useState<DailyGameItem[]>([]);
@@ -190,6 +213,8 @@ export function DailyPriceGame() {
     clientY: number;
   } | null>(null);
   const [stats, setStats] = useState<DailyGameStatsState>(EMPTY_STATS);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [hasAutoOpenedShare, setHasAutoOpenedShare] = useState(false);
   const listRef = useRef<HTMLUListElement | null>(null);
   const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const dragHoldTimeoutRef = useRef<number | null>(null);
@@ -312,7 +337,7 @@ export function DailyPriceGame() {
           ? savedToday.challenge
           : loadCachedChallenge(todayKey);
 
-      if (cachedChallenge) {
+      if (cachedChallenge && hasChallengeScoringData(cachedChallenge)) {
         const savedResult = isSavedResultCompatible(
           cachedChallenge.items,
           savedToday?.result,
@@ -395,8 +420,32 @@ export function DailyPriceGame() {
   }, []);
 
   const canSubmit = useMemo(() => {
-    return Boolean(challenge) && !result && orderedItems.length === 5;
+    return (
+      Boolean(challenge && hasChallengeScoringData(challenge)) &&
+      !result &&
+      orderedItems.length === 5
+    );
   }, [challenge, orderedItems.length, result]);
+
+  const shareUrl = `${SHARE_BASE_URL}${ORDER_BY_PRICE_ENDPOINT}`;
+  const shareText = useMemo(() => {
+    if (!challenge) {
+      return "Play the Daily Order By Price game on CS Price Tracker.";
+    }
+
+    if (result) {
+      return `I scored ${result.exactMatches}/5 in Daily Order By Price (${challenge.dayKey}) on CS Price Tracker. Can you beat it?`;
+    }
+
+    return `Can you beat today's Daily Order By Price challenge (${challenge.dayKey}) on CS Price Tracker?`;
+  }, [challenge, result]);
+
+  useEffect(() => {
+    if (!isLoading && result && !hasAutoOpenedShare) {
+      setIsShareOpen(true);
+      setHasAutoOpenedShare(true);
+    }
+  }, [hasAutoOpenedShare, isLoading, result]);
 
   const correctByPosition = useMemo(() => {
     if (!result) {
@@ -416,8 +465,13 @@ export function DailyPriceGame() {
     );
   }, [result]);
 
-  const onSubmit = async () => {
+  const onSubmit = () => {
     if (!challenge || !canSubmit) {
+      return;
+    }
+
+    if (!hasChallengeScoringData(challenge)) {
+      setError("Daily game data is stale. Please refresh and try again.");
       return;
     }
 
@@ -426,10 +480,24 @@ export function DailyPriceGame() {
 
     try {
       const submittedHashes = orderedItems.map((item) => item.marketHashName);
-      const nextResult = await submitDailyGameGuess({
+      const correctOrder = getCorrectOrder(challenge.items);
+      const exactMatches = submittedHashes.reduce((count, marketHashName, index) => {
+        return correctOrder[index]?.marketHashName === marketHashName ? count + 1 : count;
+      }, 0);
+      const nextResult = {
         dayKey: challenge.dayKey,
-        orderedMarketHashNames: submittedHashes,
-      });
+        submittedOrder: submittedHashes,
+        exactMatches,
+        allCorrect: exactMatches === correctOrder.length,
+        correctOrder: correctOrder.map((item, index) => ({
+          rank: index + 1,
+          marketHashName: item.marketHashName,
+          displayName: item.displayName,
+          iconUrl: item.iconUrl,
+          amount: item.amount ?? 0,
+          priceText: item.lowestPriceText,
+        })),
+      } satisfies DailyGameGuessResponse;
 
       const nextStats = recordDailyGameResult(
         "order-by-price",
@@ -439,6 +507,7 @@ export function DailyPriceGame() {
       setResult(nextResult);
       setStats(nextStats);
       saveResult(challenge.dayKey, submittedHashes, nextResult, challenge);
+      setIsShareOpen(true);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -553,20 +622,20 @@ export function DailyPriceGame() {
     const showResultStyles = Boolean(result);
     const isGhostRow = isDragging && activeDragHash === item.marketHashName;
 
-    let rowClass = "border-[#2d3f52] bg-[#111b27]/85 hover:bg-[#152131]";
+    let rowClass = "border-[var(--line)] bg-[var(--surface-1)] hover:bg-[var(--surface-2)]";
 
     if (showResultStyles && isCorrect) {
-      rowClass = "border-[#3f6a33] bg-[#1d3221]";
+      rowClass = "border-[#56734b] bg-[#273427]";
     }
 
     if (showResultStyles && !isCorrect) {
-      rowClass = "border-[#7b3e3e] bg-[#3a1f24]";
+      rowClass = "border-[#795158] bg-[#3a292d]";
     }
 
     if (isGhostRow) {
       return (
         <li
-          className="relative select-none rounded-lg border border-dashed border-[#66c0f4] bg-[#122739]/70 px-4 py-3 shadow-[inset_0_0_0_1px_rgba(102,192,244,0.18)]"
+          className="relative select-none rounded-[2px] border border-dashed border-[#637f9c] bg-[#1a2531]/70 px-3 py-2.5 shadow-[inset_0_0_0_1px_rgba(143,170,196,0.14)]"
           key={item.marketHashName}
           ref={(node) => {
             rowRefs.current[item.marketHashName] = node;
@@ -582,7 +651,7 @@ export function DailyPriceGame() {
 
     return (
       <li
-        className={`relative select-none rounded-lg border px-4 py-3 transition-transform duration-150 ${rowClass}`}
+        className={`relative select-none rounded-[2px] border px-3 py-2.5 transition-transform duration-150 ${rowClass}`}
         key={item.marketHashName}
         ref={(node) => {
           rowRefs.current[item.marketHashName] = node;
@@ -652,21 +721,21 @@ export function DailyPriceGame() {
       >
         <div className="flex items-start justify-between gap-3 sm:items-center">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="w-7 text-center text-sm font-semibold text-[#89a9c3]">
+            <span className="w-7 text-center text-sm font-semibold text-[var(--text-dim)]">
               {displayIndex + 1}
             </span>
             {item.iconUrl ? (
               <Image
                 alt={item.displayName}
-                className="rounded-md border border-slate-700 bg-slate-900"
+                className="rounded-[2px] border border-[#465362] bg-[#10151b]"
                 height={40}
                 src={item.iconUrl}
                 width={40}
               />
             ) : (
-              <span className="h-10 w-10 rounded-md border border-slate-700 bg-slate-900" />
+              <span className="h-10 w-10 rounded-[2px] border border-[#465362] bg-[#10151b]" />
             )}
-            <span className="min-w-0 text-sm leading-snug text-[#d9e7f5] [overflow-wrap:anywhere]">
+            <span className="min-w-0 text-sm leading-snug text-[#e0e5ea] [overflow-wrap:anywhere]">
               {item.displayName}
             </span>
           </div>
@@ -676,24 +745,24 @@ export function DailyPriceGame() {
                 aria-hidden
                 className="ml-1 grid cursor-grab select-none grid-cols-2 gap-0.5 active:cursor-grabbing"
               >
-                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
-                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
-                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
-                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
-                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
-                <span className="h-1 w-1 rounded-full bg-[#89a9c3]" />
+                <span className="h-1 w-1 rounded-full bg-[var(--text-dim)]" />
+                <span className="h-1 w-1 rounded-full bg-[var(--text-dim)]" />
+                <span className="h-1 w-1 rounded-full bg-[var(--text-dim)]" />
+                <span className="h-1 w-1 rounded-full bg-[var(--text-dim)]" />
+                <span className="h-1 w-1 rounded-full bg-[var(--text-dim)]" />
+                <span className="h-1 w-1 rounded-full bg-[var(--text-dim)]" />
               </span>
             </div>
           ) : (
             <div className="text-right">
               <p
                 className={`text-xs font-semibold ${
-                  isCorrect ? "text-[#9fd58f]" : "text-[#f0a5a5]"
+                  isCorrect ? "text-[#bfdba1]" : "text-[#e5b3b3]"
                 }`}
               >
                 {isCorrect ? "Correct" : "Incorrect"}
               </p>
-              <p className="text-xs text-[#c7d5e0]">
+              <p className="text-xs text-[#c8d0d8]">
                 {(() => {
                   const priced = resultByHash?.get(item.marketHashName);
                   if (!priced) {
@@ -711,25 +780,25 @@ export function DailyPriceGame() {
   };
 
   return (
-    <section className="h-full">
-      <article className="flex h-full flex-col rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-4 shadow-[0_12px_26px_rgba(0,0,0,0.34)] sm:p-6">
+    <section className="h-full" id="order-by-price">
+      <article className="panel relative flex h-full flex-col p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[#89a9c3]">
+            <p className="label-caps">
               Daily Game
             </p>
-            <h2 className="mt-1 text-xl font-semibold text-[#d9e7f5]">Order By Price</h2>
+            <h2 className="mt-1 text-xl font-semibold text-[#e3e7ec]">Order By Price</h2>
           </div>
         </div>
 
-        <p className="mt-2 text-sm text-[#9fb5ca]">
+        <p className="mt-2 text-sm text-[var(--text-dim)]">
           Rank today&apos;s 5 items from lowest to highest Steam market price.
         </p>
-        <p className="mt-1 text-xs text-[#89a9c3]">
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
           Record {stats.orderByPrice.wins}/{stats.orderByPrice.played} wins • Streak {stats.orderByPrice.currentStreak}
         </p>
 
-        {isLoading ? <p className="mt-4 text-sm text-[#9fb5ca]">Loading daily game...</p> : null}
+        {isLoading ? <p className="mt-4 text-sm text-[var(--text-dim)]">Loading daily game...</p> : null}
         {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
 
         {!isLoading && challenge ? (
@@ -740,7 +809,7 @@ export function DailyPriceGame() {
 
             {dragPreview ? (
               <div
-                className="pointer-events-none fixed z-40 rounded-lg border border-[#66c0f4] bg-[#142536]/95 px-4 py-3 shadow-[0_16px_32px_rgba(0,0,0,0.42)]"
+                className="pointer-events-none fixed z-40 rounded-[2px] border border-[#5f7792] bg-[#1b2735]/95 px-3 py-2.5 shadow-[0_16px_32px_rgba(0,0,0,0.42)]"
                 style={{
                   left: `${dragPreview.left}px`,
                   top: `${Math.max(8, dragPreview.clientY - dragPreview.offsetY)}px`,
@@ -751,15 +820,15 @@ export function DailyPriceGame() {
                   {dragPreview.item.iconUrl ? (
                     <Image
                       alt={dragPreview.item.displayName}
-                      className="rounded-md border border-slate-700 bg-slate-900"
+                      className="rounded-[2px] border border-[#465362] bg-[#10151b]"
                       height={38}
                       src={dragPreview.item.iconUrl}
                       width={38}
                     />
                   ) : (
-                    <span className="h-9 w-9 rounded-md border border-slate-700 bg-slate-900" />
+                    <span className="h-9 w-9 rounded-[2px] border border-[#465362] bg-[#10151b]" />
                   )}
-                  <span className="text-sm font-medium leading-snug text-[#d9e7f5] [overflow-wrap:anywhere]">
+                  <span className="text-sm font-medium leading-snug text-[#dce1e8] [overflow-wrap:anywhere]">
                     {dragPreview.item.displayName}
                   </span>
                 </div>
@@ -768,10 +837,10 @@ export function DailyPriceGame() {
 
             {!result ? (
               <button
-                className="mt-4 w-full cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2.5 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                className="btn btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 disabled={!canSubmit || isSubmitting}
                 onClick={() => {
-                  void onSubmit();
+                  onSubmit();
                 }}
                 type="button"
               >
@@ -780,10 +849,21 @@ export function DailyPriceGame() {
             ) : null}
 
             {result ? (
-              <p className="mt-4 text-sm text-[#9fb5ca]">
-                Score: <span className="font-semibold text-[#d9e7f5]">{result.exactMatches}/5 exact</span>
+              <p className="mt-4 text-sm text-[var(--text-dim)]">
+                Score: <span className="font-semibold text-[#dce2e8]">{result.exactMatches}/5 exact</span>
               </p>
             ) : null}
+
+            <GameShareOverlay
+              isOpen={isShareOpen}
+              onClose={() => {
+                setIsShareOpen(false);
+              }}
+              shareText={shareText}
+              shareUrl={shareUrl}
+              subtitle="Challenge your friends with today's lineup."
+              title="Daily Order By Price"
+            />
           </>
         ) : null}
       </article>

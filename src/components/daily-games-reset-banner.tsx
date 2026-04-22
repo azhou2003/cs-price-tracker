@@ -45,5 +45,5 @@ export function DailyGamesResetBanner() {
     return <DailyResetCountdown expiresAt={expiresAt} />;
   }
 
-  return <p className="text-sm text-[#9fb5ca]">Loading reset timer...</p>;
+  return <p className="text-sm text-[var(--text-dim)]">Loading reset timer...</p>;
 }

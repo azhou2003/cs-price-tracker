@@ -1,7 +1,6 @@
 import type {
   DailyGameChallengeResponse,
   DailyGameGuessResponse,
-  DailyPriceGuessAttemptResponse,
   DailyPriceGuessChallengeResponse,
   MarketItem,
   PriceSnapshot,
@@ -22,11 +21,6 @@ type ItemResponse = {
 type DailyGameGuessPayload = {
   dayKey: string;
   orderedMarketHashNames: string[];
-};
-
-type DailyPriceGuessPayload = {
-  dayKey: string;
-  guess: number;
 };
 
 type ErrorResponse = {
@@ -123,22 +117,4 @@ export async function fetchDailyPriceGuessGame(): Promise<DailyPriceGuessChallen
   }
 
   return (await response.json()) as DailyPriceGuessChallengeResponse;
-}
-
-export async function submitDailyPriceGuess(
-  payload: DailyPriceGuessPayload,
-): Promise<DailyPriceGuessAttemptResponse> {
-  const response = await fetch("/api/daily-price-guess/guess", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw await toError(response, "Failed to submit daily price guess");
-  }
-
-  return (await response.json()) as DailyPriceGuessAttemptResponse;
 }

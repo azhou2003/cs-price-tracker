@@ -55,14 +55,14 @@ export function DailyResetCountdown({ expiresAt }: DailyResetCountdownProps) {
   const remaining = hasValidDate ? Math.max(0, expiresMs - now) : 0;
 
   return (
-    <div className="rounded-md border border-[#2f4256] bg-[#122131]/80 px-3 py-2">
-      <p className="text-xs text-[#89a9c3]">
+    <div className="panel-inset px-3 py-2">
+      <p className="text-xs text-[var(--text-dim)]">
         Resets in{" "}
-        <span className="font-semibold text-[#d9e7f5]">
+        <span className="font-semibold text-[#e2e7ed]">
           {hasValidDate ? formatRemaining(remaining) : "--:--:--"}
         </span>
       </p>
-      <p className="text-[11px] text-[#7d9ab3]">at {formatUtcDate(expiresAt)} (UTC)</p>
+      <p className="text-[11px] text-[var(--text-muted)]">at {formatUtcDate(expiresAt)} (UTC)</p>
     </div>
   );
 }

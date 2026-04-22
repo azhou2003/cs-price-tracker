@@ -1,30 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useState } from "react";
 
 import {
   clearLocalState,
   DEFAULT_STATE,
+  exportBackupPayload,
+  importBackupPayload,
   loadLocalState,
   saveLocalState,
   updateSettings,
 } from "@/lib/storage";
 
 export function SettingsPageClient() {
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(
+    DEFAULT_STATE.settings.autoRefreshEnabled,
+  );
   const [refreshMinutes, setRefreshMinutes] = useState(
     DEFAULT_STATE.settings.refreshIntervalMinutes,
   );
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    DEFAULT_STATE.settings.notificationsEnabled,
-  );
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       const state = loadLocalState();
+      setAutoRefreshEnabled(state.settings.autoRefreshEnabled);
       setRefreshMinutes(state.settings.refreshIntervalMinutes);
-      setNotificationsEnabled(state.settings.notificationsEnabled);
     }, 0);
 
     return () => {
@@ -35,8 +39,8 @@ export function SettingsPageClient() {
   const onSave = () => {
     const current = loadLocalState();
     const next = updateSettings(current, {
+      autoRefreshEnabled,
       refreshIntervalMinutes: Math.min(Math.max(refreshMinutes, 1), 120),
-      notificationsEnabled,
     });
 
     saveLocalState(next);
@@ -56,8 +60,8 @@ export function SettingsPageClient() {
     }
 
     clearLocalState();
+    setAutoRefreshEnabled(DEFAULT_STATE.settings.autoRefreshEnabled);
     setRefreshMinutes(DEFAULT_STATE.settings.refreshIntervalMinutes);
-    setNotificationsEnabled(DEFAULT_STATE.settings.notificationsEnabled);
     setSaved(false);
     setCleared(true);
     window.setTimeout(() => {
@@ -65,19 +69,81 @@ export function SettingsPageClient() {
     }, 2000);
   };
 
+  const onExportBackup = () => {
+    const payload = exportBackupPayload();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cs-price-tracker-backup-${date}.json`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const onImportBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setImportMessage(null);
+    setImportError(null);
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const result = importBackupPayload(parsed);
+
+      if (!result.ok) {
+        setImportError(result.error);
+        return;
+      }
+
+      const state = loadLocalState();
+      setAutoRefreshEnabled(state.settings.autoRefreshEnabled);
+      setRefreshMinutes(state.settings.refreshIntervalMinutes);
+      setSaved(false);
+      setCleared(false);
+      setImportMessage("Backup imported successfully.");
+    } catch {
+      setImportError("Unable to import backup file.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   return (
-    <section className="rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-6 shadow-[0_12px_26px_rgba(0,0,0,0.34)]">
-      <h2 className="text-2xl font-semibold text-[#d9e7f5]">Settings</h2>
-      <p className="mt-2 text-sm text-[#9fb5ca]">
+    <section className="panel p-4 sm:p-5">
+      <p className="label-caps">Configuration</p>
+      <h2 className="mt-1 text-xl font-semibold text-[#e3e8ed]">Settings</h2>
+      <p className="mt-2 text-sm text-[var(--text-dim)]">
         These preferences are saved only in your browser.
       </p>
 
-      <div className="mt-5 space-y-4">
-        <label className="block text-sm text-[#c7d5e0]" htmlFor="refresh">
+      <div className="mt-4 space-y-3">
+        <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]" htmlFor="refresh">
           Refresh interval (minutes)
         </label>
+        <label className="flex items-center gap-3 text-sm text-[#d8dee5]" htmlFor="auto-refresh-toggle">
+          <input
+            checked={autoRefreshEnabled}
+            className="cursor-pointer"
+            id="auto-refresh-toggle"
+            onChange={(event) => {
+              setAutoRefreshEnabled(event.target.checked);
+            }}
+            type="checkbox"
+          />
+          Enable auto-refresh
+        </label>
         <input
-          className="w-full max-w-xs rounded-md border border-[#31465d] bg-[#0d141d] px-4 py-3 text-[#d9e7f5] outline-none focus:border-[#66c0f4]"
+          className="field no-spinner max-w-xs"
+          disabled={!autoRefreshEnabled}
           id="refresh"
           max={120}
           min={1}
@@ -87,27 +153,13 @@ export function SettingsPageClient() {
           type="number"
           value={refreshMinutes}
         />
-
-        <label className="cursor-pointer flex items-center gap-3 text-sm text-[#c7d5e0]" htmlFor="notifications">
-          <input
-            checked={notificationsEnabled}
-            className="cursor-pointer"
-            id="notifications"
-            onChange={(event) => {
-              setNotificationsEnabled(event.target.checked);
-            }}
-            type="checkbox"
-          />
-          Enable local browser notifications
-        </label>
-        <p className="text-xs text-[#89a9c3]">
-          This toggle stores your preference for future price alerts. Alerts are not being
-          sent yet until threshold notifications are implemented.
+        <p className="text-xs text-[var(--text-muted)]">
+          Auto-refresh runs on the watchlist dashboard every configured interval.
         </p>
 
         <div className="flex flex-wrap gap-2">
           <button
-            className="cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9]"
+            className="btn btn-primary"
             onClick={onSave}
             type="button"
           >
@@ -115,7 +167,7 @@ export function SettingsPageClient() {
           </button>
 
           <button
-            className="cursor-pointer rounded-md border border-[#6a3f3f] bg-gradient-to-b from-[#7e4040] to-[#5a2f2f] px-4 py-2 text-sm font-semibold text-[#ffe8e8] hover:from-[#965050] hover:to-[#6b3939]"
+            className="btn btn-danger"
             onClick={onClear}
             type="button"
           >
@@ -123,8 +175,45 @@ export function SettingsPageClient() {
           </button>
         </div>
 
-        {saved ? <p className="text-sm text-emerald-300">Saved.</p> : null}
-        {cleared ? <p className="text-sm text-amber-300">Local data cleared.</p> : null}
+        <div className="panel-inset mt-2 p-3">
+          <p className="label-caps">Data Backup</p>
+          <p className="mt-1 text-xs text-[var(--text-dim)]">
+            Export and re-upload a backup to restore your watchlist and game stats.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="btn btn-muted" onClick={onExportBackup} type="button">
+              Export Backup
+            </button>
+            <label className="btn btn-muted cursor-pointer" htmlFor="backup-import">
+              Import Backup
+            </label>
+            <input
+              accept="application/json"
+              className="sr-only"
+              id="backup-import"
+              onChange={(event) => {
+                void onImportBackup(event);
+              }}
+              type="file"
+            />
+          </div>
+          {importMessage ? <p className="mt-2 text-sm text-[#cde6b0]">{importMessage}</p> : null}
+          {importError ? <p className="mt-2 text-sm text-rose-300">{importError}</p> : null}
+        </div>
+
+        {saved ? <p className="text-sm text-[#cde6b0]">Saved.</p> : null}
+        {cleared ? <p className="text-sm text-[#e5cd9f]">Local data cleared.</p> : null}
+      </div>
+
+      <div className="panel-inset mt-5 p-3">
+        <p className="label-caps">Local Storage Notice</p>
+        <p className="mt-1 text-sm text-[#d8dee5]">
+          Watchlist, history, daily game progress, and settings are stored only on this
+          browser profile.
+        </p>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">
+          Switching devices or clearing browser storage will permanently remove this data.
+        </p>
       </div>
     </section>
   );

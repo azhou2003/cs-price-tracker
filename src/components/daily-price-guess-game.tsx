@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { GameShareOverlay } from "@/components/game-share-overlay";
 import {
   fetchDailyPriceGuessGame,
 } from "@/lib/api-client";
@@ -35,6 +36,8 @@ type SavedDailyPriceGuessChallengeCache = {
 
 const DAILY_PRICE_GUESS_CHALLENGE_CACHE_KEY =
   "cs-price-tracker:daily-price-guess-challenge:v1";
+const SHARE_BASE_URL = "https://www.cspricetracker.com";
+const PRICE_GUESS_ENDPOINT = "/games#price-guess";
 
 function getUtcDayKeyNow() {
   const now = new Date();
@@ -168,6 +171,8 @@ export function DailyPriceGuessGame() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DailyGameStatsState>(EMPTY_STATS);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [hasAutoOpenedShare, setHasAutoOpenedShare] = useState(false);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -264,6 +269,29 @@ export function DailyPriceGuessGame() {
   }, [attempts.length, challenge]);
 
   const isComplete = Boolean(solvedAttempt) || (challenge ? remainingAttempts === 0 : false);
+  const shareUrl = `${SHARE_BASE_URL}${PRICE_GUESS_ENDPOINT}`;
+  const shareText = useMemo(() => {
+    if (!challenge) {
+      return "Play the Daily Price Guess game on CS Price Tracker.";
+    }
+
+    if (solvedAttempt) {
+      return `I won Daily Price Guess in ${attempts.length}/${challenge.maxAttempts} guesses (${challenge.dayKey}) on CS Price Tracker. Can you beat me?`;
+    }
+
+    if (isComplete) {
+      return `I lost Daily Price Guess after ${attempts.length}/${challenge.maxAttempts} guesses (${challenge.dayKey}) on CS Price Tracker. Think you can do better?`;
+    }
+
+    return `Can you beat today's Daily Price Guess challenge (${challenge.dayKey}) on CS Price Tracker?`;
+  }, [attempts.length, challenge, isComplete, solvedAttempt]);
+
+  useEffect(() => {
+    if (!isLoading && isComplete && !hasAutoOpenedShare) {
+      setIsShareOpen(true);
+      setHasAutoOpenedShare(true);
+    }
+  }, [hasAutoOpenedShare, isComplete, isLoading]);
 
   const submitGuess = async () => {
     if (!challenge || isComplete) {
@@ -322,6 +350,10 @@ export function DailyPriceGuessGame() {
       setGuessInput("");
       saveState(challenge.dayKey, nextAttempts, challenge);
 
+      if (completed) {
+        setIsShareOpen(true);
+      }
+
       if (!completed) {
         window.requestAnimationFrame(() => {
           guessInputRef.current?.focus();
@@ -341,47 +373,47 @@ export function DailyPriceGuessGame() {
   const revealedPrice = solvedAttempt ?? attempts.at(-1) ?? null;
 
   return (
-    <article className="flex h-full flex-col rounded-xl border border-[#2b3b4b] bg-gradient-to-b from-[#1a2735]/95 to-[#111925]/95 p-4 shadow-[0_12px_26px_rgba(0,0,0,0.34)] sm:p-6">
+    <article className="panel relative flex h-full flex-col p-4 sm:p-5" id="price-guess">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[#89a9c3]">
+          <p className="label-caps">
             Daily Game
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-[#d9e7f5]">Price Guess</h2>
+          <h2 className="mt-1 text-xl font-semibold text-[#e3e7ed]">Price Guess</h2>
         </div>
       </div>
 
-      <p className="mt-2 text-sm text-[#9fb5ca]">
+      <p className="mt-2 text-sm text-[var(--text-dim)]">
         Guess today&apos;s item price in up to 5 attempts. You win if you are within
         5%.
       </p>
-      <p className="mt-1 text-xs text-[#89a9c3]">
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
         Record {stats.priceGuess.wins}/{stats.priceGuess.played} wins • Streak {stats.priceGuess.currentStreak}
       </p>
 
-      {isLoading ? <p className="mt-4 text-sm text-[#9fb5ca]">Loading price guess game...</p> : null}
+      {isLoading ? <p className="mt-4 text-sm text-[var(--text-dim)]">Loading price guess game...</p> : null}
       {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
 
       {!isLoading && challenge ? (
         <>
-          <div className="mt-4 rounded-md border border-[#2d3f52] bg-[#111b27]/85 p-4">
+          <div className="panel-inset mt-4 p-3">
             <div className="flex items-start gap-3 sm:items-center">
               {challenge.item.iconUrl ? (
                 <Image
                   alt={challenge.item.displayName}
-                  className="rounded-md border border-slate-700 bg-slate-900"
+                  className="rounded-[2px] border border-[#465362] bg-[#10151b]"
                   height={48}
                   src={challenge.item.iconUrl}
                   width={48}
                 />
               ) : (
-                <span className="h-12 w-12 rounded-md border border-slate-700 bg-slate-900" />
+                <span className="h-12 w-12 rounded-[2px] border border-[#465362] bg-[#10151b]" />
               )}
               <div className="min-w-0">
-                <p className="text-sm font-medium leading-snug text-[#d9e7f5] [overflow-wrap:anywhere]">
+                <p className="text-sm font-medium leading-snug text-[#dde2e8] [overflow-wrap:anywhere]">
                   {challenge.item.displayName}
                 </p>
-                <p className="text-xs text-[#89a9c3]">
+                <p className="text-xs text-[var(--text-muted)]">
                   Attempts left: {remainingAttempts}/{challenge.maxAttempts}
                 </p>
               </div>
@@ -397,7 +429,7 @@ export function DailyPriceGuessGame() {
               }}
             >
               <input
-                className="no-spinner w-full rounded-md border border-[#31465d] bg-[#0d141d] px-4 py-3 text-base text-[#d9e7f5] outline-none focus:border-[#66c0f4] sm:max-w-xs sm:py-2.5 sm:text-sm"
+                className="field no-spinner text-base sm:max-w-xs sm:py-2.5 sm:text-sm"
                 inputMode="decimal"
                 min="0"
                 onChange={(event) => {
@@ -409,7 +441,7 @@ export function DailyPriceGuessGame() {
                 value={guessInput}
               />
               <button
-                className="w-full cursor-pointer rounded-md border border-[#3e5a76] bg-gradient-to-b from-[#5ba6db] to-[#3d6f94] px-4 py-2.5 text-sm font-semibold text-[#eaf5ff] hover:from-[#6ab6ec] hover:to-[#4680a9] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                className="btn btn-primary w-full disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 disabled={isSubmitting}
                 type="submit"
               >
@@ -419,8 +451,8 @@ export function DailyPriceGuessGame() {
           ) : null}
 
           {isComplete && revealedPrice ? (
-            <p className="mt-4 text-sm text-[#9fb5ca]">
-              Final price: <span className="font-semibold text-[#d9e7f5]">{revealedPrice.actualPriceText ?? formatUsd(revealedPrice.actualAmount)}</span>
+            <p className="mt-4 text-sm text-[var(--text-dim)]">
+              Final price: <span className="font-semibold text-[#dce2e8]">{revealedPrice.actualPriceText ?? formatUsd(revealedPrice.actualAmount)}</span>
             </p>
           ) : null}
 
@@ -429,12 +461,12 @@ export function DailyPriceGuessGame() {
               const arrowColor = getArrowColor(attempt);
               return (
                 <li
-                  className="flex flex-col gap-2 rounded-md border border-[#2d3f52] bg-[#111b27]/85 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="panel-inset flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                   key={`${attempt.guess}-${index}`}
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-6 text-sm text-[#89a9c3]">#{index + 1}</span>
-                    <span className="text-sm font-medium text-[#d9e7f5]">{formatUsd(attempt.guess)}</span>
+                    <span className="w-6 text-sm text-[var(--text-dim)]">#{index + 1}</span>
+                    <span className="text-sm font-medium text-[#dde2e8]">{formatUsd(attempt.guess)}</span>
                     <span
                       className="text-lg font-bold"
                       style={{ color: arrowColor }}
@@ -443,7 +475,7 @@ export function DailyPriceGuessGame() {
                     </span>
                   </div>
                   {attempt.isCorrect ? (
-                    <span className="text-sm font-semibold text-[#9fd58f]">Correct</span>
+                    <span className="text-sm font-semibold text-[#bfda9f]">Correct</span>
                   ) : null}
                 </li>
               );
@@ -451,6 +483,16 @@ export function DailyPriceGuessGame() {
           </ul>
         </>
       ) : null}
+      <GameShareOverlay
+        isOpen={isShareOpen}
+        onClose={() => {
+          setIsShareOpen(false);
+        }}
+        shareText={shareText}
+        shareUrl={shareUrl}
+        subtitle="Share your guesses and challenge friends."
+        title="Daily Price Guess"
+      />
     </article>
   );
 }

@@ -36,9 +36,9 @@ export type WatchlistEntry = {
 };
 
 export type UserSettings = {
+  autoRefreshEnabled: boolean;
   refreshIntervalMinutes: number;
   currency: CurrencyCode;
-  notificationsEnabled: boolean;
 };
 
 export type LocalState = {
@@ -67,6 +67,8 @@ export type DailyGameItem = {
   marketHashName: string;
   displayName: string;
   iconUrl?: string;
+  amount?: number;
+  lowestPriceText?: string;
 };
 
 export type DailyGameChallengeResponse = {

@@ -7,17 +7,19 @@ import type {
 } from "@/lib/types";
 
 const STORAGE_KEY = "cs-price-tracker:v1";
+const GAME_STORAGE_KEY_PREFIX = "cs-price-tracker:daily-";
 const DAILY_GAME_STATE_KEY = "cs-price-tracker:daily-game:v1";
 const DAILY_PRICE_GUESS_STATE_KEY = "cs-price-tracker:daily-price-guess:v1";
 const DAILY_GAME_STATS_KEY = "cs-price-tracker:daily-game-stats:v1";
+const BACKUP_VERSION = 1;
 
 const DEFAULT_STATE: LocalState = {
   watchlist: [],
   historyByItem: {},
   settings: {
+    autoRefreshEnabled: true,
     refreshIntervalMinutes: 10,
     currency: "USD",
-    notificationsEnabled: false,
   },
 };
 
@@ -78,6 +80,59 @@ function toStatsEntryKey(mode: DailyGameMode) {
   return mode === "order-by-price" ? "orderByPrice" : "priceGuess";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toImportableLocalState(value: unknown): LocalState {
+  if (!isRecord(value)) {
+    return DEFAULT_STATE;
+  }
+
+  const parsedSettings = isRecord(value.settings) ? value.settings : {};
+  const parsedWatchlist = Array.isArray(value.watchlist) ? value.watchlist : [];
+  const parsedHistoryByItem = isRecord(value.historyByItem)
+    ? (value.historyByItem as LocalState["historyByItem"])
+    : {};
+
+  return normalizeState({
+    ...DEFAULT_STATE,
+    ...value,
+    watchlist: parsedWatchlist as LocalState["watchlist"],
+    historyByItem: parsedHistoryByItem,
+    settings: {
+      ...DEFAULT_STATE.settings,
+      ...parsedSettings,
+    },
+  });
+}
+
+function toImportableDailyStats(value: unknown): DailyGameStatsState {
+  if (!isRecord(value)) {
+    return DEFAULT_DAILY_GAME_STATS;
+  }
+
+  return {
+    orderByPrice: {
+      ...DEFAULT_DAILY_GAME_STATS.orderByPrice,
+      ...(isRecord(value.orderByPrice) ? value.orderByPrice : {}),
+    },
+    priceGuess: {
+      ...DEFAULT_DAILY_GAME_STATS.priceGuess,
+      ...(isRecord(value.priceGuess) ? value.priceGuess : {}),
+    },
+  };
+}
+
+type ExportPayload = {
+  version: typeof BACKUP_VERSION;
+  exportedAt: string;
+  data: {
+    localState: LocalState;
+    dailyGameStats: DailyGameStatsState;
+  };
+};
+
 export function loadLocalState(): LocalState {
   if (typeof window === "undefined") {
     return DEFAULT_STATE;
@@ -117,9 +172,18 @@ export function clearLocalState() {
   }
 
   window.localStorage.removeItem(STORAGE_KEY);
-  window.localStorage.removeItem(DAILY_GAME_STATE_KEY);
-  window.localStorage.removeItem(DAILY_PRICE_GUESS_STATE_KEY);
-  window.localStorage.removeItem(DAILY_GAME_STATS_KEY);
+
+  const gameKeys: string[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(GAME_STORAGE_KEY_PREFIX)) {
+      gameKeys.push(key);
+    }
+  }
+
+  for (const key of gameKeys) {
+    window.localStorage.removeItem(key);
+  }
 }
 
 export function loadDailyGameStats(): DailyGameStatsState {
@@ -306,6 +370,57 @@ export function updateSettings(
       ...state.settings,
       ...settings,
     },
+  };
+}
+
+export function exportBackupPayload(): ExportPayload {
+  return {
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: {
+      localState: loadLocalState(),
+      dailyGameStats: loadDailyGameStats(),
+    },
+  };
+}
+
+export function importBackupPayload(payload: unknown) {
+  if (typeof window === "undefined") {
+    return {
+      ok: false as const,
+      error: "Import is available only in the browser.",
+    };
+  }
+
+  if (!isRecord(payload)) {
+    return {
+      ok: false as const,
+      error: "Invalid backup file format.",
+    };
+  }
+
+  if (payload.version !== BACKUP_VERSION) {
+    return {
+      ok: false as const,
+      error: "Unsupported backup version.",
+    };
+  }
+
+  if (!isRecord(payload.data)) {
+    return {
+      ok: false as const,
+      error: "Backup data is missing.",
+    };
+  }
+
+  const nextLocalState = toImportableLocalState(payload.data.localState);
+  const nextStats = toImportableDailyStats(payload.data.dailyGameStats);
+
+  saveLocalState(nextLocalState);
+  saveDailyGameStats(nextStats);
+
+  return {
+    ok: true as const,
   };
 }
 

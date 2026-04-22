@@ -19,6 +19,8 @@ export async function GET() {
           marketHashName: item.marketHashName,
           displayName: item.displayName,
           iconUrl: item.iconUrl,
+          amount: item.amount,
+          lowestPriceText: item.lowestPriceText,
         })),
       },
       { status: 200 },
