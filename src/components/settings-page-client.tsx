@@ -118,94 +118,122 @@ export function SettingsPageClient() {
   };
 
   return (
-    <section className="panel p-4 sm:p-5">
-      <p className="label-caps">Configuration</p>
-      <h2 className="mt-1 text-xl font-semibold text-[#e3e8ed]">Settings</h2>
-      <p className="mt-2 text-sm text-[var(--text-dim)]">
-        These preferences are saved only in your browser.
-      </p>
-
-      <div className="mt-4 space-y-3">
-        <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]" htmlFor="refresh">
-          Refresh interval (minutes)
-        </label>
-        <label className="flex items-center gap-3 text-sm text-[#d8dee5]" htmlFor="auto-refresh-toggle">
-          <input
-            checked={autoRefreshEnabled}
-            className="cursor-pointer"
-            id="auto-refresh-toggle"
-            onChange={(event) => {
-              setAutoRefreshEnabled(event.target.checked);
-            }}
-            type="checkbox"
-          />
-          Enable auto-refresh
-        </label>
-        <input
-          className="field no-spinner max-w-xs"
-          disabled={!autoRefreshEnabled}
-          id="refresh"
-          max={120}
-          min={1}
-          onChange={(event) => {
-            setRefreshMinutes(Number(event.target.value));
-          }}
-          type="number"
-          value={refreshMinutes}
-        />
-        <p className="text-xs text-[var(--text-muted)]">
-          Auto-refresh runs on the watchlist dashboard every configured interval.
-        </p>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="btn btn-primary"
-            onClick={onSave}
-            type="button"
-          >
-            Save Settings
-          </button>
-
-          <button
-            className="btn btn-danger"
-            onClick={onClear}
-            type="button"
-          >
-            Clear Local Data
-          </button>
-        </div>
-
-        <div className="panel-inset mt-2 p-3">
-          <p className="label-caps">Data Backup</p>
-          <p className="mt-1 text-xs text-[var(--text-dim)]">
-            Export and re-upload a backup to restore your watchlist and game stats.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button className="btn btn-muted" onClick={onExportBackup} type="button">
-              Export Backup
-            </button>
-            <label className="btn btn-muted cursor-pointer" htmlFor="backup-import">
-              Import Backup
-            </label>
-            <input
-              accept="application/json"
-              className="sr-only"
-              id="backup-import"
-              onChange={(event) => {
-                void onImportBackup(event);
-              }}
-              type="file"
-            />
+    <section className="space-y-4">
+      <article className="panel p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="label-caps">Configuration</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#e3e8ed]">Settings</h2>
           </div>
-          {importMessage ? <p className="mt-2 text-sm text-[#cde6b0]">{importMessage}</p> : null}
-          {importError ? <p className="mt-2 text-sm text-rose-300">{importError}</p> : null}
+          <span className="chip chip-neutral">Local profile</span>
         </div>
 
-        {saved ? <p className="text-sm text-[#cde6b0]">Saved.</p> : null}
-        {cleared ? <p className="text-sm text-[#e5cd9f]">Local data cleared.</p> : null}
-      </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <section className="panel-inset p-3 sm:p-4">
+            <p className="label-caps">Watchlist Refresh</p>
+            <p className="mt-1 text-sm text-[#d8dee5]">
+              Control automatic refresh behavior for the main dashboard.
+            </p>
 
-      <div className="panel-inset mt-5 p-3">
+            <fieldset aria-describedby="refresh-help" className="mt-4 space-y-3">
+              <legend className="sr-only">Auto refresh settings</legend>
+              <label className="flex items-center gap-3 text-sm text-[#d8dee5]" htmlFor="auto-refresh-toggle">
+                <input
+                  checked={autoRefreshEnabled}
+                  className="cursor-pointer"
+                  id="auto-refresh-toggle"
+                  onChange={(event) => {
+                    setAutoRefreshEnabled(event.target.checked);
+                  }}
+                  type="checkbox"
+                />
+                Enable auto-refresh
+              </label>
+
+              <div>
+                <label
+                  className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]"
+                  htmlFor="refresh"
+                >
+                  Refresh interval (minutes)
+                </label>
+                <input
+                  className="field no-spinner mt-2 max-w-[220px]"
+                  disabled={!autoRefreshEnabled}
+                  id="refresh"
+                  max={120}
+                  min={1}
+                  onChange={(event) => {
+                    setRefreshMinutes(Number(event.target.value));
+                  }}
+                  type="number"
+                  value={refreshMinutes}
+                />
+              </div>
+            </fieldset>
+
+            <p className="mt-3 text-xs text-[var(--text-muted)]" id="refresh-help">
+              Runs every 1-120 minutes while the watchlist page remains open.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="btn btn-primary" onClick={onSave} type="button">
+                Save Settings
+              </button>
+            </div>
+            {saved ? <p className="mt-2 text-sm text-[#cde6b0]">Settings saved.</p> : null}
+          </section>
+
+          <div className="space-y-4">
+            <section className="panel-inset p-3 sm:p-4">
+              <p className="label-caps">Data Backup</p>
+              <p className="mt-1 text-sm text-[#d8dee5]">
+                Export and import a JSON snapshot of your local watchlist, game progress,
+                and stats.
+              </p>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button className="btn btn-muted" onClick={onExportBackup} type="button">
+                  Export Backup
+                </button>
+                <label className="btn btn-muted cursor-pointer" htmlFor="backup-import">
+                  Import Backup
+                </label>
+                <input
+                  accept="application/json"
+                  className="sr-only"
+                  id="backup-import"
+                  onChange={(event) => {
+                    void onImportBackup(event);
+                  }}
+                  type="file"
+                />
+              </div>
+
+              <p className="mt-3 text-xs text-[var(--text-muted)]">
+                Keep backups before clearing browser data or switching devices.
+              </p>
+              {importMessage ? <p className="mt-2 text-sm text-[#cde6b0]">{importMessage}</p> : null}
+              {importError ? <p className="mt-2 text-sm text-rose-300">{importError}</p> : null}
+            </section>
+
+            <section className="panel-inset border-[#4d3a3a] p-3 sm:p-4">
+              <p className="label-caps">Danger Zone</p>
+              <p className="mt-1 text-sm text-[#e2d5d5]">
+                Remove all local watchlist, history, game progress, and settings from this browser.
+              </p>
+              <div className="mt-4">
+                <button className="btn btn-danger" onClick={onClear} type="button">
+                  Clear Local Data
+                </button>
+              </div>
+              {cleared ? <p className="mt-2 text-sm text-[#e5cd9f]">Local data cleared.</p> : null}
+            </section>
+          </div>
+        </div>
+      </article>
+
+      <article className="panel-inset p-3 sm:p-4">
         <p className="label-caps">Local Storage Notice</p>
         <p className="mt-1 text-sm text-[#d8dee5]">
           Watchlist, history, daily game progress, and settings are stored only on this
@@ -214,7 +242,7 @@ export function SettingsPageClient() {
         <p className="mt-1 text-xs text-[var(--text-dim)]">
           Switching devices or clearing browser storage will permanently remove this data.
         </p>
-      </div>
+      </article>
     </section>
   );
 }

@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types";
 
 const STORAGE_KEY = "cs-price-tracker:v1";
+const APP_STORAGE_KEY_PREFIX = "cs-price-tracker:";
 const GAME_STORAGE_KEY_PREFIX = "cs-price-tracker:daily-";
 const DAILY_GAME_STATE_KEY = "cs-price-tracker:daily-game:v1";
 const DAILY_PRICE_GUESS_STATE_KEY = "cs-price-tracker:daily-price-guess:v1";
@@ -84,6 +85,74 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function clearAppStorageKeys() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const keys: string[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(APP_STORAGE_KEY_PREFIX)) {
+      keys.push(key);
+    }
+  }
+
+  for (const key of keys) {
+    window.localStorage.removeItem(key);
+  }
+}
+
+function loadAppStorageSnapshot() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  const snapshot: Record<string, string> = {};
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key || !key.startsWith(APP_STORAGE_KEY_PREFIX)) {
+      continue;
+    }
+
+    const value = window.localStorage.getItem(key);
+    if (typeof value === "string") {
+      snapshot[key] = value;
+    }
+  }
+
+  return snapshot;
+}
+
+function toImportableAppStorageSnapshot(value: unknown) {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const snapshot: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!key.startsWith(APP_STORAGE_KEY_PREFIX) || typeof entry !== "string") {
+      continue;
+    }
+
+    snapshot[key] = entry;
+  }
+
+  return snapshot;
+}
+
+function applyAppStorageSnapshot(snapshot: Record<string, string>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearAppStorageKeys();
+
+  for (const [key, value] of Object.entries(snapshot)) {
+    window.localStorage.setItem(key, value);
+  }
+}
+
 function toImportableLocalState(value: unknown): LocalState {
   if (!isRecord(value)) {
     return DEFAULT_STATE;
@@ -130,6 +199,7 @@ type ExportPayload = {
   data: {
     localState: LocalState;
     dailyGameStats: DailyGameStatsState;
+    appStorage: Record<string, string>;
   };
 };
 
@@ -380,6 +450,7 @@ export function exportBackupPayload(): ExportPayload {
     data: {
       localState: loadLocalState(),
       dailyGameStats: loadDailyGameStats(),
+      appStorage: loadAppStorageSnapshot(),
     },
   };
 }
@@ -410,6 +481,15 @@ export function importBackupPayload(payload: unknown) {
     return {
       ok: false as const,
       error: "Backup data is missing.",
+    };
+  }
+
+  const appStorageSnapshot = toImportableAppStorageSnapshot(payload.data.appStorage);
+  if (appStorageSnapshot) {
+    applyAppStorageSnapshot(appStorageSnapshot);
+
+    return {
+      ok: true as const,
     };
   }
 
