@@ -19,6 +19,8 @@ export async function GET() {
         expiresAt: challenge.expiresAt,
         maxAttempts: MAX_ATTEMPTS,
         toleranceUsd: challenge.item.amount * TOLERANCE_PERCENT,
+        actualAmount: challenge.item.amount,
+        actualPriceText: challenge.item.lowestPriceText,
         item: {
           marketHashName: challenge.item.marketHashName,
           displayName: challenge.item.displayName,

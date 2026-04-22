@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fetchDailyPriceGuessGame,
-  submitDailyPriceGuess,
 } from "@/lib/api-client";
 import {
   DAILY_PRICE_GUESS_STATE_KEY,
@@ -157,6 +156,10 @@ function getArrowColor(attempt: DailyPriceGuessAttemptResponse) {
   return `hsl(${hue} 88% ${lightness}%)`;
 }
 
+function hasClientCheckData(challenge: DailyPriceGuessChallengeResponse) {
+  return Number.isFinite(challenge.actualAmount) && challenge.actualAmount > 0;
+}
+
 export function DailyPriceGuessGame() {
   const [challenge, setChallenge] = useState<DailyPriceGuessChallengeResponse | null>(null);
   const [attempts, setAttempts] = useState<DailyPriceGuessAttemptResponse[]>([]);
@@ -201,7 +204,7 @@ export function DailyPriceGuessGame() {
           ? savedToday.challenge
           : loadCachedChallenge(todayKey);
 
-      if (cachedChallenge) {
+      if (cachedChallenge && hasClientCheckData(cachedChallenge)) {
         if (!cancelled) {
           setStats(loadDailyGameStats());
           setChallenge(cachedChallenge);
@@ -267,8 +270,8 @@ export function DailyPriceGuessGame() {
       return;
     }
 
-    const guess = Number(guessInput);
-    if (!Number.isFinite(guess) || guess < 0) {
+      const guess = Number(guessInput);
+      if (!Number.isFinite(guess) || guess < 0) {
       setError("Enter a valid non-negative number.");
       window.requestAnimationFrame(() => {
         guessInputRef.current?.focus();
@@ -280,10 +283,28 @@ export function DailyPriceGuessGame() {
     setError(null);
 
     try {
-      const attempt = await submitDailyPriceGuess({
+      const actualAmount = challenge.actualAmount;
+      const toleranceUsd = challenge.toleranceUsd;
+      const difference = Math.abs(actualAmount - guess);
+      const isCorrect = difference <= toleranceUsd;
+      const direction: DailyPriceGuessAttemptResponse["direction"] = isCorrect
+        ? "exact"
+        : guess < actualAmount
+          ? "higher"
+          : "lower";
+      const scale = Math.max(actualAmount * 0.25, 1);
+      const normalized = Math.min(difference / scale, 1);
+      const attempt: DailyPriceGuessAttemptResponse = {
         dayKey: challenge.dayKey,
         guess,
-      });
+        toleranceUsd,
+        difference,
+        isCorrect,
+        direction,
+        proximityScore: 1 - normalized,
+        actualAmount,
+        actualPriceText: challenge.actualPriceText,
+      };
 
       const nextAttempts = [...attempts, attempt].slice(0, challenge.maxAttempts);
       const completed = attempt.isCorrect || nextAttempts.length >= challenge.maxAttempts;

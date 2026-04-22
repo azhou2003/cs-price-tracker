@@ -97,6 +97,8 @@ export type DailyPriceGuessChallengeResponse = {
   expiresAt: string;
   maxAttempts: number;
   toleranceUsd: number;
+  actualAmount: number;
+  actualPriceText?: string;
   item: DailyGameItem;
 };
 

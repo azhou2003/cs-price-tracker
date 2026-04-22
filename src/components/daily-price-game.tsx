@@ -489,6 +489,9 @@ export function DailyPriceGame() {
         }
 
         pendingTouch.latestY = event.clientY;
+        if (event.pointerType === "touch" && event.cancelable) {
+          event.preventDefault();
+        }
         return;
       }
 
@@ -585,7 +588,7 @@ export function DailyPriceGame() {
           rowRefs.current[item.marketHashName] = node;
         }}
         style={{
-          touchAction: result ? "auto" : "manipulation",
+          touchAction: result ? "auto" : "none",
         }}
         onPointerCancel={() => {
           clearDragHoldTimeout();
