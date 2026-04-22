@@ -176,6 +176,10 @@ function getArrow(attempt: DailyPriceGuessAttemptResponse) {
 }
 
 function getArrowColor(attempt: DailyPriceGuessAttemptResponse) {
+  if (attempt.isCorrect) {
+    return "var(--buy)";
+  }
+
   const base = Math.max(attempt.actualAmount, 0.01);
   const distancePercent = Math.abs(attempt.guess - attempt.actualAmount) / base;
   const normalized = Math.max(0, Math.min(1, distancePercent));
