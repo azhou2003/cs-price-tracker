@@ -144,6 +144,22 @@ export function SettingsPageClient() {
     }
   };
 
+  const selectedTypeCount = dailyGameIncludedTypes.length;
+
+  const onDailyTypeToggle = (type: DailyGameItemType, checked: boolean) => {
+    if (checked) {
+      setDailyGameIncludedTypes((current) =>
+        normalizeDailyGameItemTypes([...current, type]),
+      );
+      return;
+    }
+
+    setDailyGameIncludedTypes((current) => {
+      const next = current.filter((entry) => entry !== type);
+      return next.length > 0 ? normalizeDailyGameItemTypes(next) : [...current];
+    });
+  };
+
   return (
     <section className="space-y-4">
       <article className="panel p-4 sm:p-5">
@@ -156,80 +172,86 @@ export function SettingsPageClient() {
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <section className="panel-inset p-3 sm:p-4">
-            <p className="label-caps">Watchlist Refresh</p>
-            <p className="mt-1 text-sm text-[#d8dee5]">
-              Control automatic refresh behavior for the main dashboard.
-            </p>
+          <div className="space-y-4">
+            <section className="panel-inset p-3 sm:p-4">
+              <p className="label-caps">Watchlist Refresh</p>
+              <p className="mt-1 text-sm text-[#d8dee5]">
+                Control automatic refresh behavior for the main dashboard.
+              </p>
 
-            <fieldset aria-describedby="refresh-help" className="mt-4 space-y-3">
-              <legend className="sr-only">Auto refresh settings</legend>
-              <label className="flex items-center gap-3 text-sm text-[#d8dee5]" htmlFor="auto-refresh-toggle">
-                <input
-                  checked={autoRefreshEnabled}
-                  className="cursor-pointer"
-                  id="auto-refresh-toggle"
-                  onChange={(event) => {
-                    setAutoRefreshEnabled(event.target.checked);
-                  }}
-                  type="checkbox"
-                />
-                Enable auto-refresh
-              </label>
-
-              <div>
-                <label
-                  className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]"
-                  htmlFor="refresh"
-                >
-                  Refresh interval (minutes)
+              <fieldset aria-describedby="refresh-help" className="mt-4 space-y-3">
+                <legend className="sr-only">Auto refresh settings</legend>
+                <label className="flex items-center gap-3 text-sm text-[#d8dee5]" htmlFor="auto-refresh-toggle">
+                  <input
+                    checked={autoRefreshEnabled}
+                    className="cursor-pointer"
+                    id="auto-refresh-toggle"
+                    onChange={(event) => {
+                      setAutoRefreshEnabled(event.target.checked);
+                    }}
+                    type="checkbox"
+                  />
+                  Enable auto-refresh
                 </label>
-                <input
-                  className="field no-spinner mt-2 max-w-[220px]"
-                  disabled={!autoRefreshEnabled}
-                  id="refresh"
-                  max={120}
-                  min={1}
-                  onChange={(event) => {
-                    setRefreshMinutes(Number(event.target.value));
-                  }}
-                  type="number"
-                  value={refreshMinutes}
-                />
-              </div>
 
-              <div>
-                <p className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]">
-                  Daily games item types
-                </p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label
+                    className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#a9b2bc]"
+                    htmlFor="refresh"
+                  >
+                    Refresh interval (minutes)
+                  </label>
+                  <input
+                    className="field no-spinner mt-2 max-w-[220px]"
+                    disabled={!autoRefreshEnabled}
+                    id="refresh"
+                    max={120}
+                    min={1}
+                    onChange={(event) => {
+                      setRefreshMinutes(Number(event.target.value));
+                    }}
+                    type="number"
+                    value={refreshMinutes}
+                  />
+                </div>
+              </fieldset>
+
+              <p className="mt-3 text-xs text-[var(--text-muted)]" id="refresh-help">
+                Runs every 1-120 minutes while the watchlist page remains open.
+              </p>
+            </section>
+
+            <section className="panel-inset p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="label-caps">Daily Games Pool</p>
+                <span className="chip chip-neutral">{selectedTypeCount} active</span>
+              </div>
+              <p className="mt-1 text-sm text-[#d8dee5]">
+                Choose which market item categories can appear in daily challenges.
+              </p>
+
+              <fieldset className="mt-4">
+                <legend className="sr-only">Daily games item type filters</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
                   {DAILY_GAME_ITEM_TYPE_VALUES.map((type) => {
                     const checked = dailyGameIncludedTypes.includes(type);
+                    const disableToggle = checked && selectedTypeCount === 1;
 
                     return (
                       <label
-                        className="flex items-center gap-2 text-sm text-[#d8dee5]"
+                        className={`flex items-center gap-2 text-sm ${
+                          disableToggle ? "text-[var(--text-dim)]" : "text-[#d8dee5]"
+                        }`}
                         htmlFor={`daily-game-type-${type}`}
                         key={type}
                       >
                         <input
                           checked={checked}
                           className="cursor-pointer"
+                          disabled={disableToggle}
                           id={`daily-game-type-${type}`}
                           onChange={(event) => {
-                            if (event.target.checked) {
-                              setDailyGameIncludedTypes((current) =>
-                                normalizeDailyGameItemTypes([...current, type]),
-                              );
-                              return;
-                            }
-
-                            setDailyGameIncludedTypes((current) => {
-                              const next = current.filter((entry) => entry !== type);
-                              return next.length > 0
-                                ? normalizeDailyGameItemTypes(next)
-                                : [...current];
-                            });
+                            onDailyTypeToggle(type, event.target.checked);
                           }}
                           type="checkbox"
                         />
@@ -238,21 +260,22 @@ export function SettingsPageClient() {
                     );
                   })}
                 </div>
+              </fieldset>
+
+              <p className="mt-3 text-xs text-[var(--text-muted)]">
+                At least one type must stay enabled.
+              </p>
+            </section>
+
+            <section className="panel-inset p-3 sm:p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button className="btn btn-primary" onClick={onSave} type="button">
+                  Save Settings
+                </button>
+                {saved ? <span className="chip chip-buy">Saved</span> : null}
               </div>
-            </fieldset>
-
-            <p className="mt-3 text-xs text-[var(--text-muted)]" id="refresh-help">
-              Runs every 1-120 minutes while the watchlist page remains open. Daily games
-              include your selected item types.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button className="btn btn-primary" onClick={onSave} type="button">
-                Save Settings
-              </button>
-            </div>
-            {saved ? <p className="mt-2 text-sm text-[#cde6b0]">Settings saved.</p> : null}
-          </section>
+            </section>
+          </div>
 
           <div className="space-y-4">
             <section className="panel-inset p-3 sm:p-4">
