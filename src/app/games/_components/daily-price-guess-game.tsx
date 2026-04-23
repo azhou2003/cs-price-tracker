@@ -468,6 +468,7 @@ export function DailyPriceGuessGame() {
                 className="field no-spinner text-base sm:max-w-xs sm:py-2.5 sm:text-sm"
                 inputMode="decimal"
                 min="0"
+                step="0.01"
                 onChange={(event) => {
                   setGuessInput(event.target.value);
                 }}
