@@ -339,20 +339,52 @@ export function DashboardClient() {
     watchlist.length,
   ]);
 
-  const addItem = (item: MarketItem) => {
-    const nextState = addToWatchlist(loadLocalState(), {
+  const addItem = async (item: MarketItem) => {
+    const trackedState = addToWatchlist(loadLocalState(), {
       marketHashName: item.marketHashName,
       displayName: item.displayName,
       iconUrl: item.iconUrl,
     });
 
-    saveLocalState(nextState);
-    setState(nextState);
+    saveLocalState(trackedState);
+    setState(trackedState);
+
+    const maxAttempts = 3;
+    const retryDelayMs = 1200;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const snapshot = await fetchItemPrice(item.marketHashName);
+        if (!snapshot) {
+          continue;
+        }
+
+        const nextState = appendPriceSnapshot(loadLocalState(), snapshot);
+        saveLocalState(nextState);
+        setState(nextState);
+
+        if (activeItem?.marketHashName === item.marketHashName) {
+          setActivePrice(snapshot);
+        }
+
+        return;
+      } catch {
+        // Initial polling should not interrupt adding an item.
+      }
+
+      if (attempt < maxAttempts - 1) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => {
+            resolve();
+          }, retryDelayMs);
+        });
+      }
+    }
   };
 
   const selectSearchItem = (item: MarketItem) => {
     if (!isTracked(state, item.marketHashName)) {
-      addItem(item);
+      void addItem(item);
     }
 
     setQuery("");
